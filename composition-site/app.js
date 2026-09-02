@@ -101,6 +101,7 @@
   const PRELOAD_BATCH_SIZE_BASE = 10;
   const PRELOAD_REQUEST_TIMEOUT_MS = 9000;
   const PRELOAD_PROGRESS_STEP = 8;
+  const PRELOAD_BUTTON_TEXT = '预加载本篇单词';
 
   function normalizeAnnotation(annotation) {
     return {
@@ -569,14 +570,13 @@
     if (!wordNodes.length) {
       showToast('当前范文没有可识别的英文词。');
       dom.preloadGlossaryButton.disabled = false;
-      dom.preloadGlossaryButton.textContent = '预加载本篇单词';
+      dom.preloadGlossaryButton.textContent = PRELOAD_BUTTON_TEXT;
       setExplanationLoading(false, '当前范文没有可识别的英文词可预加载。');
       return;
     }
 
     isPreloadingGlossary = true;
     dom.preloadGlossaryButton.disabled = true;
-    dom.preloadGlossaryButton.textContent = '预加载中…';
     setExplanationLoading(true, '正在预加载本篇词义…');
 
     const requests = [];
@@ -594,6 +594,14 @@
     const total = requests.length;
     const concurrency = preloadConcurrency(total);
     let lastProgress = 0;
+    if (total === 0) {
+      dom.preloadGlossaryButton.textContent = '已预加载本篇单词';
+      isPreloadingGlossary = false;
+      dom.preloadGlossaryButton.disabled = false;
+      setExplanationLoading(false, '当前词义已缓存，可直接悬浮查看。');
+      return;
+    }
+    setPreloadButtonProgress(0, total);
 
     const runWorker = async () => {
       while (idx < total) {
@@ -616,8 +624,9 @@
           failCount += 1;
         }
         if (token !== preloadRequestId || !isPreloadingGlossary) return;
+        const done = Math.min(successCount + failCount, total);
+        setPreloadButtonProgress(done, total);
         if (total > 20) {
-          const done = Math.min(successCount + failCount, total);
           if (done === 1 || done === total || done - lastProgress >= PRELOAD_PROGRESS_STEP) {
             lastProgress = done;
             setExplanationLoading(true, `正在预加载本篇单词…${done} / ${total}`);
@@ -632,7 +641,7 @@
     } finally {
       if (token === preloadRequestId) {
         isPreloadingGlossary = false;
-        const buttonText = requests.length ? '预加载本篇单词' : '已预加载本篇单词';
+        const buttonText = requests.length ? PRELOAD_BUTTON_TEXT : '已预加载本篇单词';
         dom.preloadGlossaryButton.disabled = false;
         dom.preloadGlossaryButton.textContent = buttonText;
         setExplanationLoading(
@@ -646,6 +655,14 @@
         if (failCount > 0) showToast('部分词汇暂时未能预加载，请稍后再次尝试。');
       }
     }
+  }
+
+  function setPreloadButtonProgress(done, total) {
+    if (!dom.preloadGlossaryButton || !Number.isFinite(total) || total <= 0) {
+      dom.preloadGlossaryButton.textContent = PRELOAD_BUTTON_TEXT;
+      return;
+    }
+    dom.preloadGlossaryButton.textContent = `预加载中… ${done} / ${total}`;
   }
 
   function setExplanationLoading(isLoading, message) {
