@@ -6,7 +6,7 @@ const clientPath = path.resolve(__dirname, '..', 'api-client.js');
 
 assert.equal(fs.existsSync(clientPath), true, 'The authenticated API client must exist.');
 
-const { ApiError, SESSION_TOKEN_KEY, createApiClient } = require(clientPath);
+const { ApiError, SESSION_TOKEN_KEY, REMEMBERED_TOKEN_KEY, REMEMBERED_EMAIL_KEY, createApiClient } = require(clientPath);
 
 function memoryStorage() {
   const values = new Map();
@@ -32,6 +32,7 @@ const replies = [
   response(200, { selectedText: 'essay', kind: 'word', translationZh: '文章', memoryHint: 'essay writing', contentVersion: 1 }),
   response(200, { selectedText: 'make meaningful progress', kind: 'phrase', translationZh: '取得有意义的进步', memoryHint: null, contentVersion: 1 }),
   response(201, { id: 11, selectedText: 'make meaningful progress', kind: 'phrase', translationZh: '取得有意义的进步', note: '短语笔记', contentVersion: 1 }),
+  response(204),
   response(204)
 ];
 const storage = memoryStorage();
@@ -92,8 +93,13 @@ const api = createApiClient({
   assert.equal('learningText' in savePayload, false, 'New phrase recording must save the selected source phrase, not a separately generated collocation.');
   assert.equal('selectedText' in savePayload, false, 'The browser must not submit raw source text because the server derives it from offsets.');
 
-  await api.logout();
+  await api.deleteComposition(9);
+  assert.equal(calls[5].url, '/api/compositions/9');
+  assert.equal(calls[5].options.method, 'DELETE');
   assert.equal(calls[5].options.headers.Authorization, 'Bearer opaque-token');
+
+  await api.logout();
+  assert.equal(calls[6].options.headers.Authorization, 'Bearer opaque-token');
   assert.equal(storage.getItem(SESSION_TOKEN_KEY), null);
 
   const failedApi = createApiClient({
@@ -104,5 +110,62 @@ const api = createApiClient({
     () => failedApi.listCompositions(),
     (error) => error instanceof ApiError && error.status === 401
   );
+
+  // 记住我：勾选后令牌与邮箱保留在本设备，密码绝不落盘。
+  const persistent = memoryStorage();
+  const rememberedApi = createApiClient({
+    storage: memoryStorage(),
+    persistentStorage: persistent,
+    fetchImpl: async () => response(200, { token: 'remember-token', user: { id: 3, email: 'keeper@example.com', displayName: 'Keeper' } })
+  });
+  await rememberedApi.login({ email: 'keeper@example.com', password: 'StrongPass123' }, { remember: true });
+  assert.equal(persistent.getItem(REMEMBERED_EMAIL_KEY), 'keeper@example.com', '勾选记住我时应一并记住邮箱。');
+  const rememberedEntry = JSON.parse(persistent.getItem(REMEMBERED_TOKEN_KEY));
+  assert.equal(rememberedEntry.token, 'remember-token');
+  assert.ok(rememberedEntry.expiresAt > Date.now(), '记住的令牌必须带未来的过期时间。');
+  assert.ok(
+    rememberedEntry.expiresAt - Date.now() <= 7 * 24 * 60 * 60 * 1000 + 1000,
+    '记住时长不得超过七天。'
+  );
+  await rememberedApi.logout();
+  assert.equal(persistent.getItem(REMEMBERED_TOKEN_KEY), null, '退出登录必须清除记住的令牌。');
+
+  // 七天内重新打开：会话存储为空时从记住条目自动恢复。
+  const reopenedStorage = memoryStorage();
+  const reopenedPersistent = memoryStorage();
+  reopenedPersistent.setItem(REMEMBERED_TOKEN_KEY, JSON.stringify({ token: 'still-valid', expiresAt: Date.now() + 60_000 }));
+  const reopenedApi = createApiClient({
+    storage: reopenedStorage,
+    persistentStorage: reopenedPersistent,
+    fetchImpl: async () => response(200, [])
+  });
+  assert.equal(reopenedApi.getToken(), 'still-valid', '未过期的记住令牌应当自动恢复会话。');
+  assert.equal(reopenedStorage.getItem(SESSION_TOKEN_KEY), 'still-valid');
+  assert.equal(reopenedApi.getRememberedEmail(), '', '未记住邮箱时返回空字符串。');
+
+  // 超过七天的记住条目必须被丢弃并清除。
+  const expiredPersistent = memoryStorage();
+  expiredPersistent.setItem(REMEMBERED_TOKEN_KEY, JSON.stringify({ token: 'gone-token', expiresAt: Date.now() - 1000 }));
+  const expiredApi = createApiClient({
+    storage: memoryStorage(),
+    persistentStorage: expiredPersistent,
+    fetchImpl: async () => response(200, [])
+  });
+  assert.equal(expiredApi.getToken(), null, '超过七天的记住令牌不得再使用。');
+  assert.equal(expiredPersistent.getItem(REMEMBERED_TOKEN_KEY), null, '过期的记住条目应当被清除。');
+
+  // 取消勾选后再次登录：旧的令牌与邮箱都要清掉。
+  const forgetfulPersistent = memoryStorage();
+  forgetfulPersistent.setItem(REMEMBERED_TOKEN_KEY, JSON.stringify({ token: 'old-token', expiresAt: Date.now() + 60_000 }));
+  forgetfulPersistent.setItem(REMEMBERED_EMAIL_KEY, 'old@example.com');
+  const forgetfulApi = createApiClient({
+    storage: memoryStorage(),
+    persistentStorage: forgetfulPersistent,
+    fetchImpl: async () => response(200, { token: 'fresh-token', user: { id: 4, email: 'old@example.com', displayName: 'Old' } })
+  });
+  await forgetfulApi.login({ email: 'old@example.com', password: 'StrongPass123' });
+  assert.equal(forgetfulPersistent.getItem(REMEMBERED_TOKEN_KEY), null, '未勾选记住我时不得保留旧令牌。');
+  assert.equal(forgetfulPersistent.getItem(REMEMBERED_EMAIL_KEY), null, '未勾选记住我时也不得保留旧邮箱。');
+
   console.log('Authenticated composition API client passed.');
 })();

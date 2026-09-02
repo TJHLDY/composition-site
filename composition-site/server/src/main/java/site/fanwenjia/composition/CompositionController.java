@@ -55,6 +55,15 @@ public class CompositionController {
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.annotation());
     }
 
+    @DeleteMapping("/{compositionId}")
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal CurrentUser currentUser,
+            @PathVariable Long compositionId
+    ) {
+        compositionService.deleteComposition(currentUser, compositionId);
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{compositionId}/annotations/{annotationId}")
     public ResponseEntity<Void> deleteAnnotation(
             @AuthenticationPrincipal CurrentUser currentUser,

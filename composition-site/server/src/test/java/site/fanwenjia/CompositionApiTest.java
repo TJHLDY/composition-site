@@ -156,6 +156,48 @@ class CompositionApiTest {
     }
 
     @Test
+    void accountCanDeleteOnlyItsOwnEssayAndAllOfThatEssaysNotes() throws Exception {
+        String aliceToken = register("delete-api-alice@example.com", "Delete Alice");
+        MvcResult created = mockMvc.perform(post("/api/compositions")
+                        .header("Authorization", "Bearer " + aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "title", "Delete title",
+                                "content", "A meaningful contribution matters."
+                        ))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long compositionId = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+
+        mockMvc.perform(post("/api/compositions/{id}/annotations", compositionId)
+                        .header("Authorization", "Bearer " + aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "startOffset", 2,
+                                "endOffset", 12,
+                                "kind", "word",
+                                "translationZh", "有意义的",
+                                "contentVersion", 1
+                        ))))
+                .andExpect(status().isCreated());
+
+        String bobToken = register("delete-api-bob@example.com", "Delete Bob");
+        mockMvc.perform(delete("/api/compositions/{id}", compositionId)
+                        .header("Authorization", "Bearer " + bobToken))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete("/api/compositions/{id}", compositionId)
+                        .header("Authorization", "Bearer " + aliceToken))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/compositions/{id}", compositionId)
+                        .header("Authorization", "Bearer " + aliceToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/compositions").header("Authorization", "Bearer " + aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
     void explanationEndpointIsExplicitlyUnavailableUntilTheServerKeyIsConfigured() throws Exception {
         String token = register("translation@example.com", "Translator");
         MvcResult created = mockMvc.perform(post("/api/compositions")

@@ -49,6 +49,7 @@ const styles = read('styles.css');
   'id="preload-glossary-button"',
   'id="auth-gate"',
   'id="auth-form"',
+  'id="remember-me"',
   'id="logout-button"',
   'src="api-client.js"'
 ].forEach((requiredAnchor) => {
@@ -77,6 +78,7 @@ assert.match(
   'window.getSelection',
   'saveEssay',
   'saveNote',
+  'removeEssay',
   'openNoteDialog',
   'CompositionApiClient',
   'loadEssays',
@@ -92,6 +94,10 @@ assert.match(
 ].forEach((requiredBehavior) => {
   assert.ok(script.includes(requiredBehavior), `Expected preview behavior: ${requiredBehavior}`);
 });
+assert.ok(apiClient.includes('deleteComposition'), 'The browser client must be able to delete a composition.');
+assert.ok(script.includes('data-delete-essay'), 'Each composition list item must expose a delete action.');
+assert.ok(script.includes('范文及本篇摘录都会一起删除'), 'Deleting a composition must clearly warn that its notes are removed too.');
+assert.match(styles, /\.essay-delete-button/, 'The composition delete action needs its own visual treatment.');
 assert.equal(script.includes('generateLearningText'), false, 'The browser must never request AI collocation recognition.');
 assert.equal(script.includes("pending.kind !== 'phrase'"), false, 'Phrase notes must follow the same save-content guard as all note kinds.');
 assert.match(
@@ -126,7 +132,15 @@ assert.match(
   'Forced-colors mode must retain the operating system selection treatment.'
 );
 
-assert.equal(/localStorage/.test(`${html}\n${script}\n${apiClient}`), false, 'Essay data and credentials must never be stored in localStorage.');
+assert.equal(/localStorage/.test(`${html}\n${script}`), false, 'The page markup and app shell must not touch localStorage directly; persistence goes through the API client only.');
+assert.equal(/localStorage/.test(apiClient), true, 'The optional remember-me persistence is owned by the API client.');
+assert.equal(
+  /password/i.test((apiClient.match(/localStorage[\s\S]{0,140}/g) || []).join(' ')),
+  false,
+  'Passwords must never be written to localStorage; only the revocable session token and email may persist.'
+);
+assert.ok(apiClient.includes('REMEMBER_MS'), 'The remembered login must have an explicit local validity window.');
+assert.ok(script.includes('getRememberedEmail'), 'The login form should prefill the remembered email through the API client.');
 assert.ok(/sessionStorage/.test(apiClient), 'The opaque session token should be session-scoped in the API client.');
 assert.ok(/fetchImpl\s*\(/.test(apiClient), 'The API client must make same-origin API requests.');
 assert.equal(/api[-_]?key|glm|zhipu/i.test(`${html}\n${script}\n${apiClient}`), false, 'The browser source must not contain model-provider credentials or provider calls.');

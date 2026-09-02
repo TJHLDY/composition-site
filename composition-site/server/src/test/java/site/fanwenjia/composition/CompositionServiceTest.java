@@ -167,6 +167,40 @@ class CompositionServiceTest {
                 ));
     }
 
+    @Test
+    void deletingAnEssayRemovesItsNotesAndCannotCrossAccountBoundaries() {
+        CurrentUser ownerA = register("delete-a@example.com", "Delete A");
+        CurrentUser ownerB = register("delete-b@example.com", "Delete B");
+        CompositionView essayToDelete = compositionService.create(
+                ownerA,
+                new CreateCompositionRequest("Delete me", null, "A meaningful contribution matters.")
+        );
+        CompositionView otherUsersEssay = compositionService.create(
+                ownerB,
+                new CreateCompositionRequest("Keep me", null, "Another private essay.")
+        );
+        compositionService.saveAnnotation(ownerA, essayToDelete.id(), new SaveAnnotationRequest(
+                2,
+                12,
+                "word",
+                "有意义的",
+                "删除时一并清理",
+                essayToDelete.contentVersion()
+        ));
+
+        assertThatThrownBy(() -> compositionService.deleteComposition(ownerB, essayToDelete.id()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("范文不存在");
+
+        compositionService.deleteComposition(ownerA, essayToDelete.id());
+
+        assertThat(compositionService.list(ownerA)).isEmpty();
+        assertThatThrownBy(() -> compositionService.read(ownerA, essayToDelete.id()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("范文不存在");
+        assertThat(compositionService.read(ownerB, otherUsersEssay.id()).title()).isEqualTo("Keep me");
+    }
+
     private CurrentUser register(String email, String displayName) {
         AuthResult result = authService.register(new RegisterRequest(email, "StrongPass123", displayName));
         return new CurrentUser(result.user().id(), result.user().email(), result.user().displayName());

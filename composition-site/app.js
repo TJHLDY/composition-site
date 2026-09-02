@@ -29,6 +29,7 @@
     authDisplayName: document.querySelector('#auth-display-name'),
     authEmail: document.querySelector('#auth-email'),
     authPassword: document.querySelector('#auth-password'),
+    rememberMe: document.querySelector('#remember-me'),
     authSubmitButton: document.querySelector('#auth-submit-button'),
     authFormError: document.querySelector('#auth-form-error'),
     accountDisplayName: document.querySelector('#account-display-name'),
@@ -98,6 +99,9 @@
   let phraseActionTimer = null;
   let preloadRequestId = 0;
   let isPreloadingGlossary = false;
+  let preloadStopRequested = false;
+  let preloadDoneCount = 0;
+  let preloadTotalCount = 0;
   const PRELOAD_BATCH_SIZE_BASE = 10;
   const PRELOAD_REQUEST_TIMEOUT_MS = 9000;
   const PRELOAD_PROGRESS_STEP = 8;
@@ -183,7 +187,7 @@
   }
 
   function isMobileLayout() {
-    return window.matchMedia('(max-width: 680px)').matches;
+    return window.matchMedia('(max-width: 900px)').matches;
   }
 
   function renderAccount() {
@@ -200,11 +204,14 @@
     dom.essayList.innerHTML = essays.map((essay) => {
       const selected = essay.id === state.selectedId;
       return `
-        <button class="essay-row" type="button" role="listitem" data-essay-id="${escapeHtml(essay.id)}" aria-current="${selected}">
-          <span class="essay-row-title">${escapeHtml(essay.title)}</span>
-          <span class="essay-row-subtitle">${escapeHtml(essay.sourceLabel || '个人范文')}</span>
-          <span class="essay-row-time">${formatDate(essay.updatedAt)} · ${essay.noteCount} 条摘录</span>
-        </button>`;
+        <div class="essay-list-item" role="listitem">
+          <button class="essay-row" type="button" data-open-essay="${escapeHtml(essay.id)}" aria-current="${selected}">
+            <span class="essay-row-title">${escapeHtml(essay.title)}</span>
+            <span class="essay-row-subtitle">${escapeHtml(essay.sourceLabel || '个人范文')}</span>
+            <span class="essay-row-time">${formatDate(essay.updatedAt)} · ${essay.noteCount} 条摘录</span>
+          </button>
+          <button class="essay-delete-button" type="button" data-delete-essay="${escapeHtml(essay.id)}" aria-label="删除作文：${escapeHtml(essay.title)}">删除</button>
+        </div>`;
     }).join('');
   }
 
@@ -217,7 +224,7 @@
       preloadRequestId += 1;
       isPreloadingGlossary = false;
       dom.preloadGlossaryButton.disabled = true;
-      setButtonBusy(dom.preloadGlossaryButton, false, '预加载本篇单词');
+      setPreloadButtonIdle();
       dom.readerEmptyTitle.textContent = isLoading ? '正在打开范文' : '从一篇范文开始';
       dom.readerEmptyCopy.textContent = isLoading
         ? '正在从你的独立账户读取这篇范文和它的词句笔记。'
@@ -233,7 +240,7 @@
     dom.readerNoteCount.textContent = `${essay.annotations.length} 条摘录`;
     dom.essayBody.innerHTML = buildInteractiveHtml(essay.content);
     dom.preloadGlossaryButton.disabled = false;
-    setButtonBusy(dom.preloadGlossaryButton, false, '预加载本篇单词');
+    if (!isPreloadingGlossary) setPreloadButtonIdle();
     renderNotes(essay);
   }
 
@@ -349,7 +356,10 @@
     setAuthMode('login', false);
     dom.authFormError.textContent = message;
     dom.authPassword.value = '';
-    window.setTimeout(() => dom.authEmail.focus(), 0);
+    const rememberedEmail = api.getRememberedEmail();
+    if (rememberedEmail && !dom.authEmail.value) dom.authEmail.value = rememberedEmail;
+    dom.rememberMe.checked = Boolean(rememberedEmail);
+    window.setTimeout(() => (dom.authEmail.value ? dom.authPassword : dom.authEmail).focus(), 0);
   }
 
   function showApp() {
@@ -444,10 +454,11 @@
 
     setButtonBusy(dom.authSubmitButton, true);
     dom.authFormError.textContent = '';
+    const remember = dom.rememberMe.checked;
     try {
       const result = state.authMode === 'register'
-        ? await api.register({ email, password, displayName })
-        : await api.login({ email, password });
+        ? await api.register({ email, password, displayName }, { remember })
+        : await api.login({ email, password }, { remember });
       state.currentUser = result.user;
       showApp();
       await loadEssays();
@@ -565,18 +576,20 @@
       return;
     }
     if (isPreloadingGlossary) return;
+    preloadStopRequested = false;
 
     const wordNodes = Array.from(dom.essayBody.querySelectorAll('.essay-word'));
     if (!wordNodes.length) {
       showToast('当前范文没有可识别的英文词。');
       dom.preloadGlossaryButton.disabled = false;
-      dom.preloadGlossaryButton.textContent = PRELOAD_BUTTON_TEXT;
+      setPreloadButtonIdle();
       setExplanationLoading(false, '当前范文没有可识别的英文词可预加载。');
       return;
     }
 
     isPreloadingGlossary = true;
-    dom.preloadGlossaryButton.disabled = true;
+    dom.preloadGlossaryButton.disabled = false;
+    dom.preloadGlossaryButton.classList.add('is-stoppable');
     setExplanationLoading(true, '正在预加载本篇词义…');
 
     const requests = [];
@@ -596,11 +609,15 @@
     let lastProgress = 0;
     if (total === 0) {
       dom.preloadGlossaryButton.textContent = '已预加载本篇单词';
+      dom.preloadGlossaryButton.setAttribute('aria-label', '本篇单词词义已全部缓存');
+      dom.preloadGlossaryButton.classList.remove('is-stoppable');
       isPreloadingGlossary = false;
       dom.preloadGlossaryButton.disabled = false;
       setExplanationLoading(false, '当前词义已缓存，可直接悬浮查看。');
       return;
     }
+    preloadDoneCount = 0;
+    preloadTotalCount = total;
     setPreloadButtonProgress(0, total);
 
     const runWorker = async () => {
@@ -640,29 +657,51 @@
       await Promise.all(workers);
     } finally {
       if (token === preloadRequestId) {
+        const wasStopped = preloadStopRequested;
+        preloadStopRequested = false;
         isPreloadingGlossary = false;
-        const buttonText = requests.length ? PRELOAD_BUTTON_TEXT : '已预加载本篇单词';
-        dom.preloadGlossaryButton.disabled = false;
-        dom.preloadGlossaryButton.textContent = buttonText;
-        setExplanationLoading(
-          false,
-          requests.length
-            ? (failCount
-              ? `已完成预加载：${successCount} 条成功，${failCount} 条暂时未返回。`
-              : `本篇单词预加载完成（共 ${successCount} 条）。`)
-            : '当前词义已缓存，可直接悬浮查看。'
-        );
-        if (failCount > 0) showToast('部分词汇暂时未能预加载，请稍后再次尝试。');
+        dom.preloadGlossaryButton.classList.remove('is-stoppable');
+        if (!wasStopped) {
+          const buttonText = requests.length ? PRELOAD_BUTTON_TEXT : '已预加载本篇单词';
+          dom.preloadGlossaryButton.disabled = false;
+          dom.preloadGlossaryButton.textContent = buttonText;
+          setExplanationLoading(
+            false,
+            requests.length
+              ? (failCount
+                ? `已完成预加载：${successCount} 条成功，${failCount} 条暂时未返回。`
+                : `本篇单词预加载完成（共 ${successCount} 条）。`)
+              : '当前词义已缓存，可直接悬浮查看。'
+          );
+          if (failCount > 0) showToast('部分词汇暂时未能预加载，请稍后再次尝试。');
+        }
       }
     }
   }
 
   function setPreloadButtonProgress(done, total) {
     if (!dom.preloadGlossaryButton || !Number.isFinite(total) || total <= 0) {
-      dom.preloadGlossaryButton.textContent = PRELOAD_BUTTON_TEXT;
+      setPreloadButtonIdle();
       return;
     }
-    dom.preloadGlossaryButton.textContent = `预加载中… ${done} / ${total}`;
+    dom.preloadGlossaryButton.classList.add('is-stoppable');
+    dom.preloadGlossaryButton.textContent = `停止 ${done} / ${total}`;
+    dom.preloadGlossaryButton.setAttribute('aria-label', `停止预加载（已完成 ${done} / 共 ${total}）`);
+  }
+
+  function setPreloadButtonIdle() {
+    dom.preloadGlossaryButton.classList.remove('is-stoppable');
+    dom.preloadGlossaryButton.setAttribute('aria-label', '预加载当前范文词义');
+    dom.preloadGlossaryButton.textContent = PRELOAD_BUTTON_TEXT;
+  }
+
+  function stopPreloadingGlossary() {
+    if (!isPreloadingGlossary) return;
+    preloadStopRequested = true;
+    isPreloadingGlossary = false;
+    setPreloadButtonIdle();
+    setExplanationLoading(false, '预加载已停止；已加载的词义保留，再次点击可继续。');
+    showToast(`已停止预加载（完成 ${preloadDoneCount} / ${preloadTotalCount}）；再次点击可从剩余单词继续。`);
   }
 
   function setExplanationLoading(isLoading, message) {
@@ -811,7 +850,7 @@
       return;
     }
     const rects = Array.from(range.getClientRects()).filter((rect) => rect.width || rect.height);
-    const rect = rects.at(-1) || range.getBoundingClientRect();
+    const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
     if (!rect.width) return;
     const actionWidth = dom.phraseAction.offsetWidth || 310;
     const top = Math.min(window.innerHeight - 56, Math.max(12, rect.bottom + 10));
@@ -951,6 +990,27 @@
     }
   }
 
+  async function removeEssay(essayId) {
+    const essay = state.essays.find((item) => item.id === String(essayId));
+    if (!essay) return;
+    if (!window.confirm(`确定删除「${essay.title}」吗？范文及本篇摘录都会一起删除，且无法恢复。`)) return;
+    try {
+      await api.deleteComposition(essay.id);
+      state.essays = state.essays.filter((item) => item.id !== essay.id);
+      if (state.selectedId === essay.id) {
+        state.selectedId = null;
+        state.selectedEssay = null;
+        pendingAnnotation = null;
+        hidePhraseAction();
+        dom.workspace.classList.remove('show-reader');
+      }
+      renderAll();
+      showToast('范文及本篇摘录已删除。');
+    } catch (error) {
+      if (!handleExpiredSession(error)) showToast(errorMessage(error, '范文暂时没有删除成功。'));
+    }
+  }
+
   function showToast(message) {
     window.clearTimeout(toastTimer);
     dom.toast.textContent = message;
@@ -973,7 +1033,13 @@
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));
     dom.logoutButton.addEventListener('click', () => void logout());
     dom.newEssayButton.addEventListener('click', openEssayDialog);
-    dom.preloadGlossaryButton.addEventListener('click', () => void preloadCurrentEssayExplanations());
+    dom.preloadGlossaryButton.addEventListener('click', () => {
+      if (isPreloadingGlossary) {
+        stopPreloadingGlossary();
+        return;
+      }
+      void preloadCurrentEssayExplanations();
+    });
     document.querySelectorAll('[data-open-new-essay]').forEach((button) => button.addEventListener('click', openEssayDialog));
     document.querySelectorAll('[data-close-dialog]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -994,8 +1060,13 @@
     dom.backToLibrary.addEventListener('click', () => dom.workspace.classList.remove('show-reader'));
 
     dom.essayList.addEventListener('click', (event) => {
-      const row = event.target.closest('[data-essay-id]');
-      if (row) void selectEssay(row.dataset.essayId);
+      const deleteButton = event.target.closest('[data-delete-essay]');
+      if (deleteButton) {
+        void removeEssay(deleteButton.dataset.deleteEssay);
+        return;
+      }
+      const row = event.target.closest('[data-open-essay]');
+      if (row) void selectEssay(row.dataset.openEssay);
     });
     dom.essayBody.addEventListener('click', (event) => {
       const wordNode = event.target.closest('.essay-word');

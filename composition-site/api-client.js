@@ -4,6 +4,9 @@
   if (root) root.CompositionApiClient = apiClient;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createCompositionApiClientModule() {
   const SESSION_TOKEN_KEY = 'fanwenjia:session-token:v1';
+  const REMEMBERED_TOKEN_KEY = 'fanwenjia:remembered-token:v1';
+  const REMEMBERED_EMAIL_KEY = 'fanwenjia:remembered-email:v1';
+  const REMEMBER_MS = 7 * 24 * 60 * 60 * 1000;
 
   class ApiError extends Error {
     constructor(status, message) {
@@ -16,20 +19,96 @@
   function createApiClient(options = {}) {
     const fetchImpl = options.fetchImpl || globalThis.fetch;
     const storage = options.storage || globalThis.sessionStorage;
+    const persistentStorage = options.persistentStorage || globalThis.localStorage;
     if (typeof fetchImpl !== 'function') throw new Error('当前环境不支持网络请求。');
     if (!storage) throw new Error('当前环境不支持会话存储。');
 
+    function readRememberedToken() {
+      if (!persistentStorage) return null;
+      try {
+        const raw = persistentStorage.getItem(REMEMBERED_TOKEN_KEY);
+        if (!raw) return null;
+        const entry = JSON.parse(raw);
+        const token = entry && typeof entry.token === 'string' ? entry.token : '';
+        const expiresAt = Number(entry && entry.expiresAt);
+        if (!token || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+          clearRememberedToken();
+          return null;
+        }
+        return { token, expiresAt };
+      } catch (error) {
+        clearRememberedToken();
+        return null;
+      }
+    }
+
+    function clearRememberedToken() {
+      if (!persistentStorage) return;
+      try {
+        persistentStorage.removeItem(REMEMBERED_TOKEN_KEY);
+      } catch (error) {
+        // 持久存储不可用时（例如隐私模式）直接放弃记住功能。
+      }
+    }
+
+    function clearRememberedEmail() {
+      if (!persistentStorage) return;
+      try {
+        persistentStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      } catch (error) {
+        // 同上：存储不可用时不阻塞登录流程。
+      }
+    }
+
+    function saveRemembered(token, email) {
+      if (!persistentStorage) return;
+      try {
+        persistentStorage.setItem(
+          REMEMBERED_TOKEN_KEY,
+          JSON.stringify({ token, expiresAt: Date.now() + REMEMBER_MS })
+        );
+        if (email) persistentStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+      } catch (error) {
+        // 存储失败时退回纯会话模式。
+      }
+    }
+
     function getToken() {
-      return storage.getItem(SESSION_TOKEN_KEY);
+      const sessionToken = storage.getItem(SESSION_TOKEN_KEY);
+      if (sessionToken) return sessionToken;
+      const remembered = readRememberedToken();
+      if (!remembered) return null;
+      try {
+        storage.setItem(SESSION_TOKEN_KEY, remembered.token);
+      } catch (error) {
+        // 会话存储写入失败时仍返回令牌供本次请求使用。
+      }
+      return remembered.token;
+    }
+
+    function getRememberedEmail() {
+      if (!persistentStorage) return '';
+      try {
+        return String(persistentStorage.getItem(REMEMBERED_EMAIL_KEY) || '');
+      } catch (error) {
+        return '';
+      }
     }
 
     function clearToken() {
       storage.removeItem(SESSION_TOKEN_KEY);
+      clearRememberedToken();
     }
 
-    function saveToken(token) {
+    function saveToken(token, sessionOptions = {}) {
       if (!token || typeof token !== 'string') throw new Error('服务未返回有效登录凭据。');
       storage.setItem(SESSION_TOKEN_KEY, token);
+      if (sessionOptions.remember) {
+        saveRemembered(token, sessionOptions.email || null);
+      } else {
+        clearRememberedToken();
+        clearRememberedEmail();
+      }
     }
 
     async function request(path, requestOptions = {}) {
@@ -86,17 +165,21 @@
       return payload;
     }
 
-    async function establishSession(path, payload) {
+    async function establishSession(path, payload, sessionOptions = {}) {
       const result = await request(path, { method: 'POST', body: payload, requiresAuth: false });
-      saveToken(result && result.token);
+      saveToken(result && result.token, {
+        remember: Boolean(sessionOptions.remember),
+        email: payload && payload.email
+      });
       return result;
     }
 
     return {
       getToken,
       clearToken,
-      register: (payload) => establishSession('/api/auth/register', payload),
-      login: (payload) => establishSession('/api/auth/login', payload),
+      getRememberedEmail,
+      register: (payload, sessionOptions) => establishSession('/api/auth/register', payload, sessionOptions),
+      login: (payload, sessionOptions) => establishSession('/api/auth/login', payload, sessionOptions),
       currentUser: () => request('/api/auth/me'),
       async logout() {
         try {
@@ -108,6 +191,10 @@
       listCompositions: () => request('/api/compositions'),
       createComposition: (payload) => request('/api/compositions', { method: 'POST', body: payload }),
       readComposition: (compositionId) => request(`/api/compositions/${encodeURIComponent(compositionId)}`),
+      deleteComposition: (compositionId) => request(
+        `/api/compositions/${encodeURIComponent(compositionId)}`,
+        { method: 'DELETE' }
+      ),
       explainSelection: (compositionId, payload, requestOptions = {}) => request(
         `/api/compositions/${encodeURIComponent(compositionId)}/explanations`,
         { method: 'POST', body: payload, ...requestOptions }
@@ -123,5 +210,5 @@
     };
   }
 
-  return { ApiError, SESSION_TOKEN_KEY, createApiClient };
+  return { ApiError, SESSION_TOKEN_KEY, REMEMBERED_TOKEN_KEY, REMEMBERED_EMAIL_KEY, createApiClient };
 });

@@ -2,26 +2,16 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f2efe5" />
+    <meta name="format-detection" content="telephone=no" />
     <title>范文夹 · 你的英语作文档案</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
-    <section class="auth-gate" id="auth-gate" aria-labelledby="auth-heading">
+    <section class="auth-gate" id="auth-gate" aria-labelledby="auth-form-title">
       <div class="auth-dossier">
-        <div class="auth-introduction">
-          <span class="auth-seal" aria-hidden="true">文</span>
-          <p class="eyebrow">PERSONAL ESSAY DOSSIER</p>
-          <h1 id="auth-heading">把范文变成<br />自己的阅读档案。</h1>
-          <p>题目、范文和每一条词句笔记都只属于你的独立账户。登录后，从一篇真正想反复读的作文开始。</p>
-          <dl class="auth-principles">
-            <div><dt>01</dt><dd>作文按档案保存</dd></div>
-            <div><dt>02</dt><dd>词句只记在本篇</dd></div>
-            <div><dt>03</dt><dd>语境释义留给复习</dd></div>
-          </dl>
-        </div>
         <form class="auth-form" id="auth-form" novalidate>
           <div class="auth-form-heading">
             <p class="eyebrow" id="auth-form-kicker">WELCOME BACK</p>
@@ -40,6 +30,10 @@
           <input id="auth-email" name="email" type="email" maxlength="320" autocomplete="email" placeholder="name@example.com" required />
           <label class="field-label" for="auth-password">密码 <em>至少 8 位</em></label>
           <input id="auth-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="current-password" required />
+          <label class="remember-me">
+            <input id="remember-me" name="rememberMe" type="checkbox" />
+            <span>七天内自动登录</span>
+          </label>
           <p class="form-error" id="auth-form-error" role="alert"></p>
           <button class="primary-button auth-submit" id="auth-submit-button" type="submit">登录并进入</button>
           <p class="auth-footnote">这是一个独立站点：不会读取或合并旧项目的数据。</p>

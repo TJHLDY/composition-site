@@ -156,6 +156,15 @@ public class CompositionService {
         composition.touch();
     }
 
+    @Transactional
+    public void deleteComposition(CurrentUser currentUser, Long compositionId) {
+        Composition composition = findOwned(currentUser, compositionId);
+        annotationRepository.deleteAll(
+                annotationRepository.findByCompositionIdAndOwnerIdOrderByStartOffsetAscIdAsc(compositionId, currentUser.id())
+        );
+        compositionRepository.delete(composition);
+    }
+
     private Composition findOwned(CurrentUser currentUser, Long compositionId) {
         return compositionRepository.findByIdAndOwnerId(compositionId, currentUser.id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "范文不存在"));
