@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>搭配骨架选择小样</title>
+  <style>
+    :root { --paper:#f6f1e6; --ink:#1d3028; --moss:#214d3d; --gold:#d8ab50; --red:#bc4c35; --line:rgba(33,77,61,.2); }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:44px 24px 60px; color:var(--ink); background:radial-gradient(circle at 82% 4%, rgba(216,171,80,.2), transparent 28%), var(--paper); font-family:Georgia,"Noto Serif SC",serif; }
+    main { width:min(1050px,100%); margin:auto; }
+    .eyebrow { margin:0 0 10px; color:var(--red); font:800 .7rem/1 system-ui,sans-serif; letter-spacing:.16em; }
+    h1 { margin:0; font-size:clamp(2rem,4vw,3.5rem); letter-spacing:-.045em; }
+    .lead { max-width:720px; margin:15px 0 30px; color:#5a675f; font:400 1rem/1.75 system-ui,sans-serif; }
+    .case { position:relative; padding:24px; border:1px solid var(--line); background:rgba(255,252,245,.72); box-shadow:0 16px 38px rgba(30,56,43,.09); }
+    .case-kicker { display:block; margin-bottom:17px; color:#8c8c7d; font:800 .6rem/1 system-ui,sans-serif; letter-spacing:.14em; }
+    .sentence { margin:0; padding:22px 18px 48px; border:1px solid rgba(33,77,61,.1); background:#fbf7ed; font-size:1.18rem; line-height:2.05; }
+    .chosen { padding:1px 2px; color:#15392d; background:rgba(216,171,80,.55); box-decoration-break:clone; -webkit-box-decoration-break:clone; }
+    .ribbon { position:absolute; z-index:2; top:61px; left:45px; display:flex; align-items:center; gap:8px; max-width:calc(100% - 55px); padding:7px 8px 7px 11px; color:var(--paper); background:var(--moss); border:1px solid rgba(255,255,255,.16); border-radius:4px; box-shadow:0 10px 19px rgba(18,45,35,.26); font:800 .64rem/1 system-ui,sans-serif; letter-spacing:.04em; }
+    .ribbon .source { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; opacity:.76; font-weight:600; }
+    .ribbon .arrow { color:var(--gold); font-size:1rem; }
+    .ribbon button { flex:none; padding:7px 9px; color:var(--moss); border:0; border-radius:2px; background:var(--gold); font:800 .62rem/1 system-ui,sans-serif; }
+    .candidate { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:18px; padding:14px 16px; border-left:3px solid var(--red); background:rgba(229,223,207,.48); }
+    .candidate span { color:#70766e; font:800 .6rem/1 system-ui,sans-serif; letter-spacing:.1em; }
+    .candidate strong { color:var(--moss); font-size:1.15rem; }
+    .candidate em { color:#70766e; font:400 .74rem/1.45 system-ui,sans-serif; }
+    h2 { margin:32px 0 12px; font-size:1.22rem; }
+    .choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; }
+    .choice { min-height:158px; padding:18px; border:1px solid var(--line); border-radius:5px; background:rgba(255,252,245,.6); cursor:pointer; transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+    .choice:hover,.choice.selected { transform:translateY(-3px); border-color:var(--moss); box-shadow:0 13px 28px rgba(30,56,43,.13); }
+    .choice .letter { display:inline-flex; width:25px; height:25px; align-items:center; justify-content:center; color:var(--paper); border-radius:50%; background:var(--moss); font:800 .68rem/1 system-ui,sans-serif; }
+    .choice h3 { margin:10px 0 6px; font-size:1.05rem; }
+    .choice p { margin:0; color:#657069; font:400 .76rem/1.6 system-ui,sans-serif; }
+    .choice code { color:var(--red); font:700 .87rem/1 Georgia,serif; }
+    .recommend { margin-top:22px; padding:14px 16px; color:#45564d; border-left:3px solid var(--gold); background:rgba(255,252,245,.55); font:400 .83rem/1.65 system-ui,sans-serif; }
+    .recommend b { color:var(--moss); }
+    @media (max-width:720px) { .choices { grid-template-columns:1fr; } .ribbon { top:52px; left:32px; } .ribbon .source { display:none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">FANWENJIA · COLLOCATION SKELETON</p>
+    <h1>把语境选区，收成你真正要记的搭配。</h1>
+    <p class="lead">例如你拖选的是完整原句片段，但笔记标题只想留下 <b>combining … with</b>。系统应保留原文位置，且明确告诉你将保存成什么，而不是自动删词。</p>
+
+    <section class="case">
+      <span class="case-kicker">正常拖选完整语境</span>
+      <div class="ribbon"><span class="source">combining traditional wisdom with</span><span class="arrow">→</span><button>记作 combining … with</button></div>
+      <p class="sentence">We can create better solutions by <span class="chosen">combining traditional wisdom with</span> modern technology.</p>
+      <div class="candidate"><span>将保存为</span><strong>combining … with</strong><em>原句位置仍保留，之后可一键跳回这段语境。</em></div>
+    </section>
+
+    <h2>你希望怎么触发“搭配骨架”？</h2>
+    <section class="choices">
+      <article class="choice" data-choice="smart-skeleton" onclick="toggleSelect(this)">
+        <span class="letter">A</span>
+        <h3>自动给出骨架候选 <small>推荐</small></h3>
+        <p>你正常拖选完整片段；当它形如 <code>combining … with</code> 时，工具条直接给“记作骨架”按钮。点了才用骨架保存。</p>
+      </article>
+      <article class="choice" data-choice="manual-skeleton" onclick="toggleSelect(this)">
+        <span class="letter">B</span>
+        <h3>手动切换为骨架</h3>
+        <p>工具条先显示“收入完整短语”，旁边有“改为搭配骨架”。更通用，但需要多点一步。</p>
+      </article>
+    </section>
+    <p class="recommend"><b>我的建议：A。</b> 它不改变你的自然拖选习惯，但仍让你确认后才保存骨架；非搭配类短语继续按完整文本保存。</p>
+  </main>
+</body>
+</html>

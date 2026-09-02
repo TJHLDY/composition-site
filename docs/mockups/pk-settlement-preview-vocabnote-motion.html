@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PK 结算页 VocabNote 动效版</title>
+  <style>
+    :root {
+      --cream: #f7f3ec;
+      --paper: #fffdfa;
+      --paper-2: #faf6ee;
+      --ink: #17213a;
+      --muted: #81828e;
+      --line: #e7dfd3;
+      --blue: #4a6fa5;
+      --blue-deep: #263f73;
+      --gold: #caa65e;
+      --gold-soft: #f4ead3;
+      --red: #bd2d26;
+      --red-dark: #761511;
+      --green: #5c9a69;
+      --shadow: 0 18px 50px rgba(42, 34, 24, 0.14);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 18%, rgba(202,166,94,0.12), transparent 28%),
+        radial-gradient(circle at 84% 78%, rgba(74,111,165,0.10), transparent 30%),
+        var(--cream);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 34px 18px;
+    }
+
+    .settlement {
+      width: min(1120px, 100%);
+      background: rgba(255,253,250,0.94);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      padding: 20px 24px 18px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(244,234,211,0.62));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand small {
+      display: block;
+      color: var(--gold);
+      font-size: 0.74rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      margin-bottom: 5px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.4vw, 2rem);
+      letter-spacing: 0;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .controls button,
+    .actions button {
+      min-height: 36px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--muted);
+      padding: 0 14px;
+      font: inherit;
+      font-size: 0.82rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: 0.16s ease;
+    }
+
+    .controls button.active {
+      color: #fff;
+      background: var(--blue);
+      border-color: var(--blue);
+      box-shadow: 0 8px 18px rgba(74,111,165,0.2);
+    }
+
+    .arena {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px minmax(0, 1fr);
+      gap: 18px;
+      padding: 26px;
+    }
+
+    .player {
+      position: relative;
+      min-height: 390px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      overflow: hidden;
+      box-shadow: 0 8px 22px rgba(42,34,24,0.06);
+    }
+
+    .player::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(202,166,94,0.12), transparent 42%);
+      pointer-events: none;
+    }
+
+    .player.winner {
+      border-color: rgba(202,166,94,0.62);
+      box-shadow: 0 12px 30px rgba(202,166,94,0.13);
+    }
+
+    .player.loser {
+      background: linear-gradient(180deg, var(--paper), var(--paper-2));
+    }
+
+    .rank {
+      position: absolute;
+      right: 18px;
+      top: 18px;
+      z-index: 3;
+      padding: 5px 10px;
+      border-radius: 999px;
+      color: var(--blue);
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.78);
+      font-weight: 900;
+      font-size: 0.8rem;
+    }
+
+    .profile {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding-right: 58px;
+      min-width: 0;
+    }
+
+    .avatar-stage {
+      position: relative;
+      width: 92px;
+      height: 92px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+    }
+
+    .avatar-stage.impact {
+      animation: impactShake 0.42s 0.22s ease-out both;
+    }
+
+    .avatar {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      border: 4px solid #fff;
+      color: #fff;
+      font-size: 1.48rem;
+      font-weight: 900;
+      box-shadow: 0 12px 24px rgba(23,33,58,0.17);
+      overflow: hidden;
+    }
+
+    .winner .avatar {
+      border-color: #fff4d5;
+      box-shadow: 0 0 0 3px rgba(202,166,94,0.14), 0 14px 28px rgba(23,33,58,0.18);
+    }
+
+    .crown {
+      position: absolute;
+      left: 50%;
+      top: -18px;
+      width: 34px;
+      height: 25px;
+      transform: translateX(-50%);
+      color: var(--gold);
+      filter: drop-shadow(0 4px 8px rgba(202,166,94,0.34));
+      z-index: 5;
+    }
+
+    .brush-img {
+      position: absolute;
+      left: -20px;
+      top: -20px;
+      width: 132px;
+      height: 132px;
+      object-fit: contain;
+      z-index: 6;
+      pointer-events: none;
+      opacity: 0;
+      --flip: 1;
+      transform-origin: 50% 50%;
+      clip-path: inset(0 100% 0 0);
+      filter: drop-shadow(0 5px 7px rgba(189,45,38,0.36));
+    }
+
+    .brush-img.two {
+      --flip: 1;
+      clip-path: inset(0 0 0 100%);
+    }
+
+    .loss-1 .brush-img.one,
+    .loss-2 .brush-img.one {
+      animation: brushStrike 0.52s cubic-bezier(.13,.95,.22,1) 0.14s forwards;
+    }
+
+    .loss-2 .brush-img.two {
+      animation: brushStrikeReverse 0.52s cubic-bezier(.13,.95,.22,1) 0.68s forwards;
+    }
+
+    .splatter {
+      position: absolute;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 8px rgba(189,45,38,0.35);
+      opacity: 0;
+      z-index: 7;
+    }
+
+    .splatter.a { width: 6px; height: 6px; left: 75px; top: 21px; }
+    .splatter.b { width: 4px; height: 4px; left: 16px; top: 70px; }
+    .splatter.c { width: 5px; height: 5px; left: 82px; top: 77px; }
+
+    .loss-1 .splatter,
+    .loss-2 .splatter {
+      animation: splat 0.36s ease-out 0.46s forwards;
+    }
+
+    .loss-2 .splatter.c {
+      animation-delay: 0.96s;
+    }
+
+    .name {
+      min-width: 0;
+    }
+
+    .name strong {
+      display: block;
+      font-size: 1.18rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .name span {
+      display: block;
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 0.86rem;
+    }
+
+    .stamp {
+      position: relative;
+      z-index: 2;
+      margin-top: 24px;
+      width: fit-content;
+      padding: 6px 11px;
+      border-radius: 999px;
+      color: var(--gold);
+      background: var(--gold-soft);
+      font-weight: 900;
+      font-size: 0.78rem;
+    }
+
+    .score {
+      position: relative;
+      z-index: 2;
+      margin-top: 20px;
+    }
+
+    .score label {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .score strong {
+      display: block;
+      margin-top: 6px;
+      font-size: clamp(4rem, 7vw, 6rem);
+      line-height: 0.9;
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+
+    .winner .score strong {
+      color: var(--blue-deep);
+    }
+
+    .delta {
+      position: relative;
+      z-index: 2;
+      display: inline-flex;
+      margin-top: 15px;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-weight: 900;
+      font-size: 0.88rem;
+    }
+
+    .delta.up { color: #27643b; background: #e6f2e9; }
+    .delta.down { color: #a53630; background: #f7e5e1; }
+
+    .stats {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .stats div {
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.7);
+    }
+
+    .stats span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      margin-bottom: 4px;
+    }
+
+    .stats strong {
+      font-size: 0.95rem;
+    }
+
+    .center {
+      display: grid;
+      gap: 14px;
+    }
+
+    .verdict {
+      min-height: 390px;
+      border-radius: var(--radius);
+      background:
+        linear-gradient(180deg, rgba(38,63,115,0.96), rgba(25,38,68,0.96));
+      box-shadow: 0 16px 34px rgba(38,63,115,0.23);
+      color: #fff;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .verdict::before,
+    .verdict::after {
+      content: "";
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(244,234,211,0.78), transparent);
+    }
+
+    .verdict::before { top: 22px; }
+    .verdict::after { bottom: 22px; }
+
+    .round-tag {
+      width: fit-content;
+      margin: 0 auto 16px;
+      border-radius: 999px;
+      padding: 6px 12px;
+      border: 1px solid rgba(244,234,211,0.34);
+      color: #f6dfae;
+      font-size: 0.78rem;
+      font-weight: 900;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(2.2rem, 5vw, 3.7rem);
+      line-height: 1;
+      color: #fff;
+      letter-spacing: 0;
+      text-shadow: 0 8px 24px rgba(0,0,0,0.24);
+    }
+
+    .series {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      gap: 10px;
+      color: rgba(255,255,255,0.76);
+      font-size: 0.86rem;
+    }
+
+    .series strong {
+      color: #fff4d5;
+      font-size: 1.95rem;
+    }
+
+    .declaration {
+      margin-top: 24px;
+      padding: 18px 16px;
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, #fff3d1, #edd192);
+      color: var(--ink);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.52), 0 12px 24px rgba(0,0,0,0.14);
+      position: relative;
+    }
+
+    .declaration::before {
+      content: attr(data-label);
+      position: absolute;
+      left: 50%;
+      top: -12px;
+      transform: translateX(-50%);
+      padding: 4px 10px;
+      border-radius: 999px;
+      color: #7d5a1f;
+      background: #fff8e6;
+      border: 1px solid rgba(202,166,94,0.42);
+      font-size: 0.7rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .declaration strong {
+      display: block;
+      font-size: clamp(1.65rem, 4vw, 2.35rem);
+      line-height: 1.05;
+    }
+
+    .view-note {
+      max-width: 260px;
+      margin: 15px auto 0;
+      color: rgba(255,255,255,0.74);
+      font-size: 0.82rem;
+      line-height: 1.55;
+    }
+
+    .rounds {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+
+    .rounds-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-bottom: 10px;
+    }
+
+    .round-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .round {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 11px;
+      border-radius: 11px;
+      color: var(--muted);
+      background: #f7f2ea;
+      font-size: 0.84rem;
+    }
+
+    .round.win { color: #27643b; background: #e7f2ea; font-weight: 900; }
+    .round.loss { color: #a53630; background: #f8e7e3; font-weight: 900; }
+    .round.pending { border: 1px dashed var(--line); background: transparent; }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      padding: 0 26px 26px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      padding: 18px;
+    }
+
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 0.98rem;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 10px;
+    }
+
+    .breakdown div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .breakdown strong { color: var(--ink); }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .actions button {
+      border-radius: 12px;
+      min-height: 42px;
+      color: var(--ink);
+      padding: 0 18px;
+    }
+
+    .actions .primary {
+      color: #fff;
+      background: var(--blue);
+      border-color: var(--blue);
+      box-shadow: 0 10px 22px rgba(74,111,165,0.2);
+    }
+
+    .actions .red {
+      color: #fff;
+      background: var(--red);
+      border-color: var(--red);
+      font-weight: 900;
+    }
+
+    @keyframes brushStrike {
+      0% {
+        opacity: 1;
+        clip-path: inset(0 100% 0 0);
+        transform: translate(-12px, -8px) scaleX(var(--flip)) scale(1.12);
+        filter: drop-shadow(0 0 0 rgba(189,45,38,0));
+      }
+      62% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+        transform: translate(4px, 2px) scaleX(var(--flip)) scale(1.03);
+        filter: drop-shadow(0 8px 9px rgba(189,45,38,0.46));
+      }
+      100% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+        transform: translate(0, 0) scaleX(var(--flip)) scale(1);
+      }
+    }
+
+    @keyframes brushStrikeReverse {
+      0% {
+        opacity: 1;
+        clip-path: inset(0 0 0 100%);
+        transform: translate(12px, -8px) scaleX(var(--flip)) scale(1.12);
+        filter: drop-shadow(0 0 0 rgba(189,45,38,0));
+      }
+      62% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+        transform: translate(-4px, 2px) scaleX(var(--flip)) scale(1.03);
+        filter: drop-shadow(0 8px 9px rgba(189,45,38,0.46));
+      }
+      100% {
+        opacity: 1;
+        clip-path: inset(0 0 0 0);
+        transform: translate(0, 0) scaleX(var(--flip)) scale(1);
+      }
+    }
+
+    @keyframes impactShake {
+      0%, 100% { transform: translate(0, 0) rotate(0); }
+      18% { transform: translate(-5px, 2px) rotate(-2deg); }
+      34% { transform: translate(4px, -2px) rotate(2deg); }
+      52% { transform: translate(-2px, 1px) rotate(-1deg); }
+      70% { transform: translate(1px, 0) rotate(0.5deg); }
+    }
+
+    @keyframes splat {
+      0% { opacity: 0; transform: scale(0.2); }
+      70% { opacity: 1; transform: scale(1.16); }
+      100% { opacity: 0.9; transform: scale(1); }
+    }
+
+    @media (max-width: 920px) {
+      .arena { grid-template-columns: 1fr; }
+      .center { order: -1; }
+      .player, .verdict { min-height: auto; }
+      .bottom { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .page { padding: 14px; }
+      .topbar { flex-direction: column; }
+      .controls { justify-content: flex-start; }
+      .arena, .bottom { padding: 16px; }
+      .stats { grid-template-columns: 1fr; }
+      .profile { padding-right: 44px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="settlement">
+      <header class="topbar">
+        <div class="brand">
+          <small>VOCABNOTE ARENA</small>
+          <h1>决斗结算预览</h1>
+        </div>
+        <div class="controls">
+          <button class="active" data-view="winner">胜方视角</button>
+          <button data-view="loser">败方视角</button>
+          <button class="active" data-scenario="first">首胜</button>
+          <button data-scenario="sweep">完胜</button>
+          <button data-scenario="final">总败叉</button>
+          <button id="replayBtn">重播红线</button>
+        </div>
+      </header>
+
+      <div class="arena">
+        <article class="player winner">
+          <span class="rank" id="winnerRank">#2</span>
+          <div class="profile">
+            <div class="avatar-stage loss-0" id="winnerAvatarStage">
+              <svg class="crown" viewBox="0 0 64 44" aria-hidden="true">
+                <path fill="currentColor" d="M7 38h50l-4 6H11l-4-6Zm4-27 13 12 8-21 8 21 13-12-4 23H15L11 11Z"/>
+              </svg>
+              <div class="avatar" id="winnerAvatar" style="background:linear-gradient(135deg,#c55f4d,#7f2425);">叶</div>
+              <img class="brush-img one" src="assets/pk-brush-slash.png" alt="">
+              <img class="brush-img two" src="assets/pk-brush-slash-reverse.png" alt="">
+              <span class="splatter a"></span><span class="splatter b"></span><span class="splatter c"></span>
+            </div>
+            <div class="name">
+              <strong id="winnerName">叶陌钧</strong>
+              <span id="winnerMeta">217 分 · 胜率 69%</span>
+            </div>
+          </div>
+          <div class="stamp">胜方</div>
+          <div class="score"><label>本局得分</label><strong id="winnerScore">14</strong></div>
+          <span class="delta up" id="winnerDelta">积分 +12</span>
+          <div class="stats">
+            <div><span>排名变化</span><strong id="winnerMove">+1</strong></div>
+            <div><span>最高连击</span><strong id="winnerStreak">6</strong></div>
+            <div><span>败绩刻痕</span><strong id="winnerLosses">0</strong></div>
+          </div>
+        </article>
+
+        <section class="center">
+          <div class="verdict">
+            <div class="round-tag" id="roundTag">第一局 · 先下一城</div>
+            <h2 class="title" id="mainTitle">首胜到手</h2>
+            <div class="series"><span>BO3</span><strong id="seriesScore">1 : 0</strong><span id="seriesHint">败方可申请再战</span></div>
+            <div class="declaration" id="declaration" data-label="叶陌钧胜利刻印"><strong id="declarationText">开局先收下</strong></div>
+            <p class="view-note" id="viewNote">胜者宣言已经落下，等对方决定是否再战。</p>
+          </div>
+          <div class="rounds">
+            <div class="rounds-head"><strong>对决进程</strong></div>
+            <div class="round-list" id="roundList"></div>
+          </div>
+        </section>
+
+        <article class="player loser">
+          <span class="rank" id="loserRank">#9</span>
+          <div class="profile">
+            <div class="avatar-stage loss-1 impact" id="loserAvatarStage">
+              <div class="avatar" id="loserAvatar" style="background:linear-gradient(135deg,#4f72ad,#263f73);">周</div>
+              <img class="brush-img one" src="assets/pk-brush-slash.png" alt="">
+              <img class="brush-img two" src="assets/pk-brush-slash-reverse.png" alt="">
+              <span class="splatter a"></span><span class="splatter b"></span><span class="splatter c"></span>
+            </div>
+            <div class="name">
+              <strong id="loserName">周凛</strong>
+              <span id="loserMeta">168 分 · 胜率 57%</span>
+            </div>
+          </div>
+          <div class="stamp">败方</div>
+          <div class="score"><label>本局得分</label><strong id="loserScore">9</strong></div>
+          <span class="delta down" id="loserDelta">积分 -6</span>
+          <div class="stats">
+            <div><span>排名变化</span><strong id="loserMove">-1</strong></div>
+            <div><span>最高连击</span><strong id="loserStreak">4</strong></div>
+            <div><span>败绩刻痕</span><strong id="loserLosses">1</strong></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="bottom">
+        <section class="panel">
+          <h3>积分结算</h3>
+          <div class="breakdown">
+            <div><span>胜负基础分</span><strong id="basePoints">+10</strong></div>
+            <div><span>连击奖励</span><strong id="streakPoints">+4</strong></div>
+            <div><span>积分差修正</span><strong id="rankModifier">-2</strong></div>
+            <div><span>最终变化</span><strong id="finalPoints">+12</strong></div>
+          </div>
+        </section>
+        <section class="panel">
+          <h3>下一步</h3>
+          <div class="actions">
+            <button class="primary">赛场回顾</button>
+            <button class="red" id="rematchButton">不服再战</button>
+            <button>返回刷题</button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = { view: "winner", scenario: "first" };
+    const scenarios = {
+      first: {
+        winnerTitle: "首胜到手", loserTitle: "被先下一城",
+        roundTag: "第一局 · 先下一城", seriesScore: "1 : 0", seriesHint: "败方可申请再战",
+        declarationText: "开局先收下", viewNoteWin: "胜者宣言已经落下，等对方决定是否再战。", viewNoteLose: "头像留下第一道败绩刻痕，再战权还在。",
+        loserLosses: 1, winnerLosses: 0, winnerScore: 14, loserScore: 9, winnerDelta: "积分 +12", loserDelta: "积分 -6",
+        rematchButton: "不服再战", rounds: [["第一局","叶陌钧胜","win"],["第二局","未开始","pending"],["第三局","未开启","pending"]]
+      },
+      sweep: {
+        winnerTitle: "完胜收场", loserTitle: "遭遇完胜",
+        roundTag: "第二局 · 两局终结", seriesScore: "2 : 0", seriesHint: "本组对决结束",
+        declarationText: "两局够了", viewNoteWin: "第二道红线落下，对方头像已经成叉。", viewNoteLose: "两道败绩刻痕交叉，下一次从回顾里找回来。",
+        loserLosses: 2, winnerLosses: 0, winnerScore: 16, loserScore: 8, winnerDelta: "积分 +10", loserDelta: "积分 -7",
+        rematchButton: "对决结束", rounds: [["第一局","叶陌钧胜","win"],["第二局","叶陌钧胜","win"],["第三局","未开启","pending"]]
+      },
+      final: {
+        winnerTitle: "总胜加冕", loserTitle: "决胜落败",
+        roundTag: "第三局 · 最后一题", seriesScore: "2 : 1", seriesHint: "BO3 最终胜者",
+        declarationText: "这局我收了", viewNoteWin: "决胜局胜利，最后的刻印属于你。", viewNoteLose: "只差一题，但败绩叉已经落下。",
+        loserLosses: 2, winnerLosses: 1, winnerScore: 15, loserScore: 13, winnerDelta: "积分 +18", loserDelta: "积分 -9",
+        rematchButton: "对决结束", rounds: [["第一局","周凛胜","loss"],["第二局","叶陌钧胜","win"],["第三局","叶陌钧胜","win"]]
+      }
+    };
+
+    function text(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    }
+
+    function resetSlash(stage, losses) {
+      const clone = stage.cloneNode(true);
+      stage.parentNode.replaceChild(clone, stage);
+      clone.classList.remove("loss-0", "loss-1", "loss-2", "impact");
+      clone.classList.add("loss-" + losses);
+      if (losses > 0) {
+        void clone.offsetWidth;
+        clone.classList.add("impact");
+      }
+      return clone;
+    }
+
+    function apply() {
+      const s = scenarios[state.scenario];
+      text("mainTitle", state.view === "winner" ? s.winnerTitle : s.loserTitle);
+      text("viewNote", state.view === "winner" ? s.viewNoteWin : s.viewNoteLose);
+      text("roundTag", s.roundTag);
+      text("seriesScore", s.seriesScore);
+      text("seriesHint", s.seriesHint);
+      text("declarationText", s.declarationText);
+      text("winnerScore", s.winnerScore);
+      text("loserScore", s.loserScore);
+      text("winnerDelta", s.winnerDelta);
+      text("loserDelta", s.loserDelta);
+      text("winnerLosses", s.winnerLosses);
+      text("loserLosses", s.loserLosses);
+      text("rematchButton", s.rematchButton);
+      document.getElementById("declaration").dataset.label = document.getElementById("winnerName").textContent + "胜利刻印";
+      document.getElementById("roundList").innerHTML = s.rounds.map(r => `<div class="round ${r[2]}"><span>${r[0]}</span><strong>${r[1]}</strong></div>`).join("");
+      window.winnerStage = resetSlash(document.getElementById("winnerAvatarStage"), s.winnerLosses);
+      window.loserStage = resetSlash(document.getElementById("loserAvatarStage"), s.loserLosses);
+      document.querySelectorAll("[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === state.view));
+      document.querySelectorAll("[data-scenario]").forEach(b => b.classList.toggle("active", b.dataset.scenario === state.scenario));
+    }
+
+    document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => {
+      state.view = button.dataset.view;
+      apply();
+    }));
+
+    document.querySelectorAll("[data-scenario]").forEach(button => button.addEventListener("click", () => {
+      state.scenario = button.dataset.scenario;
+      apply();
+    }));
+
+    document.getElementById("replayBtn").addEventListener("click", apply);
+    apply();
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Activate with: --spring.profiles.active=mysql
+# All production connection values come from the deployment environment.
+spring:
+  datasource:
+    url: ${COMPOSITION_DB_URL}
+    username: ${COMPOSITION_DB_USERNAME}
+    password: ${COMPOSITION_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update

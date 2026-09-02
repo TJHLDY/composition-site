@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2efe5" />
+    <title>范文夹 · 你的英语作文档案</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <section class="auth-gate" id="auth-gate" aria-labelledby="auth-heading">
+      <div class="auth-dossier">
+        <div class="auth-introduction">
+          <span class="auth-seal" aria-hidden="true">文</span>
+          <p class="eyebrow">PERSONAL ESSAY DOSSIER</p>
+          <h1 id="auth-heading">把范文变成<br />自己的阅读档案。</h1>
+          <p>题目、范文和每一条词句笔记都只属于你的独立账户。登录后，从一篇真正想反复读的作文开始。</p>
+          <dl class="auth-principles">
+            <div><dt>01</dt><dd>作文按档案保存</dd></div>
+            <div><dt>02</dt><dd>词句只记在本篇</dd></div>
+            <div><dt>03</dt><dd>语境释义留给复习</dd></div>
+          </dl>
+        </div>
+        <form class="auth-form" id="auth-form" novalidate>
+          <div class="auth-form-heading">
+            <p class="eyebrow" id="auth-form-kicker">WELCOME BACK</p>
+            <h2 id="auth-form-title">进入你的范文夹</h2>
+            <p id="auth-form-copy">登录后继续阅读、摘录和整理自己的范文。</p>
+          </div>
+          <div class="auth-mode-toggle" role="tablist" aria-label="账户操作">
+            <button type="button" role="tab" data-auth-mode="login" aria-selected="true">登录</button>
+            <button type="button" role="tab" data-auth-mode="register" aria-selected="false">注册</button>
+          </div>
+          <div id="auth-display-name-field" hidden>
+            <label class="field-label" for="auth-display-name">怎么称呼你 <em>必填</em></label>
+            <input id="auth-display-name" name="displayName" maxlength="80" autocomplete="name" placeholder="例如：小周" />
+          </div>
+          <label class="field-label" for="auth-email">邮箱 <em>必填</em></label>
+          <input id="auth-email" name="email" type="email" maxlength="320" autocomplete="email" placeholder="name@example.com" required />
+          <label class="field-label" for="auth-password">密码 <em>至少 8 位</em></label>
+          <input id="auth-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="current-password" required />
+          <p class="form-error" id="auth-form-error" role="alert"></p>
+          <button class="primary-button auth-submit" id="auth-submit-button" type="submit">登录并进入</button>
+          <p class="auth-footnote">这是一个独立站点：不会读取或合并旧项目的数据。</p>
+        </form>
+      </div>
+    </section>
+
+    <main class="app-frame" id="app-shell" aria-label="范文夹" hidden>
+      <header class="masthead">
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true">文</span>
+          <div>
+            <p class="eyebrow">PERSONAL ESSAY DOSSIER</p>
+            <h1>范文夹</h1>
+          </div>
+        </div>
+        <div class="masthead-actions">
+          <span class="account-chip" id="account-chip"><span id="account-display-name"></span><button id="logout-button" type="button">退出</button></span>
+          <button class="icon-button add-button" id="new-essay-button" type="button" aria-label="新建作文">
+            <span aria-hidden="true">+</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="workspace" id="workspace">
+        <aside class="library-panel" aria-label="我的作文">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">MY ARCHIVE</p>
+              <h2>我的作文</h2>
+            </div>
+            <span id="essay-count" class="counter-chip">0</span>
+          </div>
+          <p class="library-copy">每一篇范文，都是一份可以慢慢做批注的阅读材料。</p>
+          <div class="essay-list" id="essay-list" role="list"></div>
+          <div class="library-footnote">
+            <span class="footnote-dot" aria-hidden="true"></span>
+            仅保存在你的独立范文账户中
+          </div>
+        </aside>
+
+        <section class="reader-panel" id="essay-reader" aria-live="polite">
+          <div class="reader-empty" id="reader-empty" hidden>
+            <span class="empty-mark" aria-hidden="true">+</span>
+            <h2 id="reader-empty-title">从一篇范文开始</h2>
+            <p id="reader-empty-copy">新建题目、范文和可选来源信息，之后就能在正文里留下自己的词句摘录。</p>
+            <button class="text-action" type="button" data-open-new-essay>新建第一篇</button>
+          </div>
+
+          <div class="reader-content" id="reader-content">
+            <div class="reader-toolbar">
+              <button class="back-button" id="back-to-library" type="button">
+                <span aria-hidden="true">←</span> 全部作文
+              </button>
+              <div class="reader-status" id="reader-status">阅读中</div>
+            </div>
+
+            <article class="essay-sheet">
+              <header class="essay-header">
+                <p class="source-label" id="reader-source-label"></p>
+                <div class="essay-title-row">
+                  <h2 id="reader-title"></h2>
+                  <button class="preload-top-button" id="preload-glossary-button" type="button" aria-label="预加载当前范文词义" disabled>
+                    预加载本篇单词
+                  </button>
+                </div>
+                <div class="essay-meta">
+                  <span id="reader-date"></span>
+                  <span class="meta-separator" aria-hidden="true">·</span>
+                  <span id="reader-word-count"></span>
+                  <span class="meta-separator" aria-hidden="true">·</span>
+                  <span id="reader-note-count"></span>
+                </div>
+              </header>
+
+              <div class="reader-rule" aria-hidden="true"></div>
+              <div class="essay-body" id="essay-body" aria-label="范文正文"></div>
+
+              <p class="selection-hint">
+                <span aria-hidden="true">⌁</span>
+                悬浮查看词义；点击单词或拖选短语，把真正想记住的内容留在本篇里。
+              </p>
+            </article>
+
+            <section class="notes-section" id="essay-notes" aria-labelledby="notes-heading">
+              <div class="notes-heading">
+                <div>
+                  <p class="eyebrow">ANNOTATIONS</p>
+                  <h2 id="notes-heading">本篇摘录</h2>
+                </div>
+                <span class="notes-total" id="notes-total">0 条</span>
+              </div>
+              <div class="notes-groups" id="notes-groups"></div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div class="phrase-action" id="phrase-action" hidden role="toolbar" aria-label="短语摘录操作">
+      <span class="phrase-action-label" id="phrase-action-label" aria-live="polite" aria-atomic="true"></span>
+      <button id="explain-phrase-button" type="button">记录短语</button>
+    </div>
+
+    <dialog class="dialog essay-dialog" id="essay-dialog" aria-labelledby="essay-dialog-title">
+      <form id="essay-form" novalidate>
+        <div class="dialog-title-row">
+          <div>
+            <p class="eyebrow">NEW DOSSIER</p>
+            <h2 id="essay-dialog-title">收进一篇范文</h2>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog="essay-dialog" aria-label="关闭">×</button>
+        </div>
+        <p class="dialog-intro">题目和范文是必填项；小标题可以标明年份、卷别或来源。</p>
+        <label class="field-label" for="essay-title">题目 <em>必填</em></label>
+        <input id="essay-title" name="title" maxlength="200" placeholder="例如：Technology and Daily Life" autocomplete="off" required />
+        <label class="field-label" for="essay-source-label">小标题 / 来源 <span>可选</span></label>
+        <input id="essay-source-label" name="sourceLabel" maxlength="100" placeholder="例如：2026 年英语二 · 第 1 套" autocomplete="off" />
+        <label class="field-label" for="essay-content">范文 <em>必填</em></label>
+        <textarea id="essay-content" name="content" rows="10" maxlength="100000" placeholder="把英文范文粘贴在这里。保存后可以点击单词、选择短语，再记下自己的理解。" required></textarea>
+        <p class="form-error" id="essay-form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog="essay-dialog">取消</button>
+          <button class="primary-button" type="submit">保存范文</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dialog note-dialog" id="note-dialog" aria-labelledby="note-dialog-title">
+      <form id="note-form" novalidate>
+        <div class="dialog-title-row">
+          <div>
+            <p class="eyebrow" id="note-kind-label">WORD NOTE</p>
+            <h2 id="note-dialog-title">把这句话留下来</h2>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog="note-dialog" aria-label="关闭">×</button>
+        </div>
+        <div class="selection-card">
+          <span class="selection-card-label">选中的内容</span>
+          <strong id="note-selected-text"></strong>
+          <p id="note-context"></p>
+        </div>
+        <div class="explanation-status" id="explanation-status" data-loading="false" role="status" aria-live="polite" aria-atomic="true">
+          <span class="demo-dot" aria-hidden="true"></span>
+          <span id="explanation-status-text">正在准备语境翻译；你也可以按自己的理解修改。</span>
+        </div>
+        <label class="field-label" for="note-translation">中文释义</label>
+        <input id="note-translation" name="translation" maxlength="1000" placeholder="可按自己的理解改写" />
+        <label class="field-label" for="note-personal-text">我的记忆提示 <span>可选</span></label>
+        <textarea id="note-personal-text" name="note" rows="4" maxlength="2000" placeholder="写下联想、搭配、易错点，或者为什么想记住它。"></textarea>
+        <input id="note-kind" name="kind" type="hidden" />
+        <input id="note-start-offset" name="startOffset" type="hidden" />
+        <input id="note-end-offset" name="endOffset" type="hidden" />
+        <input id="note-content-version" name="contentVersion" type="hidden" />
+        <p class="form-error" id="note-form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog="note-dialog">暂不保存</button>
+          <button class="primary-button" id="save-note-button" type="submit">保存到本篇笔记</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="api-client.js"></script>
+    <script src="essay-utils.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

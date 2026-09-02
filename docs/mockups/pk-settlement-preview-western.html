@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PK 结算页西部决斗版</title>
+  <style>
+    :root {
+      --night: #120f0c;
+      --coal: #1b1712;
+      --leather: #2a1f16;
+      --paper: #e8d7b9;
+      --paper-deep: #c8aa78;
+      --brass: #c4913e;
+      --brass-light: #f0c56b;
+      --bone: #f3ead8;
+      --smoke: #94846e;
+      --blood: #b5261e;
+      --blood-dark: #61110e;
+      --blue: #3f6092;
+      --green: #54835e;
+      --shadow: 0 30px 90px rgba(0,0,0,0.52);
+      --edge: rgba(240,197,107,0.34);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--bone);
+      font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(196,145,62,0.18), transparent 28%),
+        radial-gradient(circle at 82% 80%, rgba(181,38,30,0.18), transparent 24%),
+        linear-gradient(140deg, #090806, #1d1711 45%, #100d0a);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 4px),
+        linear-gradient(90deg, rgba(0,0,0,0.42), transparent 18%, transparent 82%, rgba(0,0,0,0.42));
+      mix-blend-mode: screen;
+      opacity: 0.58;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 36px 18px;
+    }
+
+    .duel {
+      position: relative;
+      width: min(1180px, 100%);
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(38,29,20,0.96), rgba(19,15,11,0.96)),
+        var(--coal);
+      border: 1px solid rgba(240,197,107,0.22);
+      box-shadow: var(--shadow), inset 0 0 0 1px rgba(255,255,255,0.04);
+      overflow: hidden;
+    }
+
+    .duel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, transparent, rgba(240,197,107,0.08), transparent),
+        radial-gradient(circle at 50% -10%, rgba(240,197,107,0.18), transparent 34%);
+      pointer-events: none;
+    }
+
+    .duel-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 22px 26px 18px;
+      border-bottom: 1px solid rgba(240,197,107,0.18);
+      background: rgba(0,0,0,0.18);
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand small {
+      display: block;
+      color: var(--brass-light);
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      font-size: 0.72rem;
+      margin-bottom: 7px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 2.6vw, 2.3rem);
+      letter-spacing: 0;
+      color: var(--bone);
+      text-shadow: 0 8px 24px rgba(0,0,0,0.55);
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .seg {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .seg button {
+      border: 1px solid rgba(240,197,107,0.25);
+      background: rgba(255,255,255,0.05);
+      color: #d8c9ae;
+      border-radius: 999px;
+      padding: 7px 12px;
+      min-height: 34px;
+      font: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      white-space: nowrap;
+    }
+
+    .seg button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(240,197,107,0.55);
+    }
+
+    .seg button.active {
+      color: #20150b;
+      background: linear-gradient(180deg, var(--brass-light), var(--brass));
+      border-color: transparent;
+      font-weight: 900;
+      box-shadow: 0 10px 22px rgba(196,145,62,0.24);
+    }
+
+    .battlefield {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px minmax(0, 1fr);
+      gap: 18px;
+      padding: 26px;
+      align-items: stretch;
+    }
+
+    .fighter {
+      position: relative;
+      min-height: 430px;
+      padding: 22px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(240,197,107,0.20);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)),
+        rgba(12,10,8,0.72);
+      overflow: hidden;
+    }
+
+    .fighter::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(125deg, rgba(240,197,107,0.10), transparent 40%),
+        linear-gradient(315deg, rgba(181,38,30,0.08), transparent 38%);
+      pointer-events: none;
+    }
+
+    .fighter.winner {
+      border-color: rgba(240,197,107,0.56);
+      box-shadow: inset 0 0 0 1px rgba(240,197,107,0.14), 0 16px 38px rgba(0,0,0,0.28);
+    }
+
+    .fighter.loser {
+      filter: saturate(0.88);
+    }
+
+    .fighter.loser::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.28));
+      pointer-events: none;
+    }
+
+    .rank {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 3;
+      border: 1px solid rgba(240,197,107,0.28);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--brass-light);
+      background: rgba(0,0,0,0.32);
+      font-weight: 900;
+      font-size: 0.8rem;
+    }
+
+    .profile {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding-right: 62px;
+      min-width: 0;
+    }
+
+    .avatar-stage {
+      position: relative;
+      width: 92px;
+      height: 92px;
+      flex: 0 0 auto;
+    }
+
+    .avatar {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 1.5rem;
+      font-weight: 900;
+      border: 4px solid rgba(243,234,216,0.86);
+      box-shadow: 0 14px 26px rgba(0,0,0,0.42);
+      overflow: hidden;
+    }
+
+    .winner .avatar {
+      border-color: var(--brass-light);
+      box-shadow: 0 0 0 3px rgba(240,197,107,0.12), 0 16px 32px rgba(0,0,0,0.5);
+    }
+
+    .loser .avatar {
+      border-color: rgba(243,234,216,0.42);
+    }
+
+    .crown {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      width: 38px;
+      height: 28px;
+      transform: translateX(-50%);
+      color: var(--brass-light);
+      filter: drop-shadow(0 5px 10px rgba(240,197,107,0.34));
+      z-index: 4;
+    }
+
+    .scar {
+      position: absolute;
+      left: 5px;
+      top: 44px;
+      width: 84px;
+      height: 11px;
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, transparent 0 2%, rgba(97,17,14,0.92) 8%, var(--blood) 42%, rgba(255,98,75,0.86) 58%, var(--blood-dark) 92%, transparent 100%);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 4px 10px rgba(181,38,30,0.42);
+      opacity: 0;
+      transform-origin: center;
+      z-index: 5;
+      clip-path: polygon(0 45%, 7% 16%, 19% 38%, 31% 20%, 48% 40%, 63% 18%, 82% 42%, 100% 28%, 96% 72%, 80% 58%, 62% 82%, 45% 60%, 30% 78%, 13% 58%, 0 76%);
+    }
+
+    .scar.one {
+      transform: rotate(39deg);
+    }
+
+    .scar.two {
+      transform: rotate(-39deg);
+    }
+
+    .avatar-stage.loss-1 .scar.one,
+    .avatar-stage.loss-2 .scar.one,
+    .avatar-stage.loss-2 .scar.two {
+      opacity: 1;
+    }
+
+    .name {
+      min-width: 0;
+    }
+
+    .name strong {
+      display: block;
+      font-size: 1.28rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .name span {
+      display: block;
+      color: var(--smoke);
+      margin-top: 6px;
+      font-size: 0.86rem;
+    }
+
+    .role-stamp {
+      position: relative;
+      z-index: 2;
+      width: fit-content;
+      margin-top: 22px;
+      border: 1px solid rgba(240,197,107,0.24);
+      border-radius: 999px;
+      padding: 7px 12px;
+      color: var(--brass-light);
+      background: rgba(0,0,0,0.24);
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+    }
+
+    .score {
+      position: relative;
+      z-index: 2;
+      margin-top: 20px;
+    }
+
+    .score label {
+      display: block;
+      color: var(--smoke);
+      font-size: 0.78rem;
+      margin-bottom: 7px;
+    }
+
+    .score strong {
+      display: block;
+      font-size: clamp(4rem, 7vw, 6.5rem);
+      line-height: 0.9;
+      color: var(--bone);
+      text-shadow: 0 12px 28px rgba(0,0,0,0.55);
+    }
+
+    .winner .score strong {
+      color: #fff5d6;
+    }
+
+    .point-delta {
+      position: relative;
+      z-index: 2;
+      display: inline-flex;
+      margin-top: 16px;
+      padding: 8px 13px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 0.9rem;
+    }
+
+    .point-delta.up {
+      color: #172411;
+      background: linear-gradient(180deg, #bfe0ad, #6fa06a);
+    }
+
+    .point-delta.down {
+      color: #ffe7df;
+      background: linear-gradient(180deg, #9f261f, #5f120e);
+    }
+
+    .fighter-stats {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+      margin-top: 28px;
+    }
+
+    .fighter-stats div {
+      border: 1px solid rgba(240,197,107,0.16);
+      background: rgba(0,0,0,0.22);
+      border-radius: 13px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .fighter-stats span {
+      display: block;
+      color: var(--smoke);
+      font-size: 0.72rem;
+      margin-bottom: 5px;
+    }
+
+    .fighter-stats strong {
+      color: var(--bone);
+      font-size: 0.94rem;
+    }
+
+    .verdict {
+      display: grid;
+      gap: 14px;
+    }
+
+    .verdict-main {
+      position: relative;
+      min-height: 430px;
+      border-radius: var(--radius);
+      padding: 24px 20px;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.58)),
+        linear-gradient(155deg, #352413, #16110c 56%, #2a1612);
+      border: 1px solid rgba(240,197,107,0.32);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 16px 36px rgba(0,0,0,0.36);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .verdict-main::before {
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border-top: 1px solid rgba(240,197,107,0.34);
+      border-bottom: 1px solid rgba(240,197,107,0.34);
+      pointer-events: none;
+    }
+
+    .verdict-main::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 20px;
+      bottom: 20px;
+      width: 1px;
+      background: linear-gradient(180deg, transparent, rgba(240,197,107,0.22), transparent);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .round-tag {
+      position: relative;
+      z-index: 2;
+      width: fit-content;
+      margin: 0 auto 16px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(240,197,107,0.42);
+      color: var(--brass-light);
+      background: rgba(0,0,0,0.30);
+      font-size: 0.78rem;
+      font-weight: 900;
+    }
+
+    .title {
+      position: relative;
+      z-index: 2;
+      margin: 0;
+      font-size: clamp(2.35rem, 5vw, 4.25rem);
+      line-height: 0.98;
+      color: var(--bone);
+      text-shadow: 0 14px 34px rgba(0,0,0,0.58);
+      letter-spacing: 0;
+    }
+
+    .duel-score {
+      position: relative;
+      z-index: 2;
+      margin: 18px auto 0;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 12px;
+      color: var(--smoke);
+      font-size: 0.86rem;
+    }
+
+    .duel-score strong {
+      color: #fff5d6;
+      font-size: 2rem;
+      letter-spacing: 0.04em;
+    }
+
+    .declaration {
+      position: relative;
+      z-index: 2;
+      margin-top: 26px;
+      padding: 18px 16px;
+      background:
+        linear-gradient(180deg, rgba(240,197,107,0.16), rgba(196,145,62,0.08)),
+        rgba(0,0,0,0.32);
+      border: 1px solid rgba(240,197,107,0.42);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+      clip-path: polygon(0 10%, 5% 0, 95% 0, 100% 10%, 100% 90%, 95% 100%, 5% 100%, 0 90%);
+    }
+
+    .declaration::before,
+    .declaration::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 28px;
+      height: 2px;
+      background: var(--brass-light);
+      opacity: 0.55;
+    }
+
+    .declaration::before { left: 12px; }
+    .declaration::after { right: 12px; }
+
+    .declaration span {
+      display: block;
+      color: var(--brass-light);
+      font-size: 0.74rem;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      margin-bottom: 8px;
+    }
+
+    .declaration strong {
+      display: block;
+      color: #fff2ca;
+      font-size: clamp(1.28rem, 3vw, 1.78rem);
+      line-height: 1.1;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.58);
+    }
+
+    .view-note {
+      position: relative;
+      z-index: 2;
+      margin: 16px auto 0;
+      color: #b6a383;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      max-width: 260px;
+    }
+
+    .rounds {
+      border-radius: var(--radius);
+      border: 1px solid rgba(240,197,107,0.20);
+      background: rgba(0,0,0,0.34);
+      padding: 14px;
+    }
+
+    .rounds-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--smoke);
+      font-size: 0.76rem;
+      margin-bottom: 10px;
+    }
+
+    .round-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .round {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 11px;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(240,197,107,0.10);
+      color: #d4c4a8;
+      font-size: 0.84rem;
+    }
+
+    .round.win {
+      color: #fff2ca;
+      background: rgba(196,145,62,0.20);
+      border-color: rgba(240,197,107,0.30);
+      font-weight: 900;
+    }
+
+    .round.loss {
+      color: #f2bbb3;
+      background: rgba(181,38,30,0.16);
+      border-color: rgba(181,38,30,0.30);
+    }
+
+    .round.pending {
+      color: #81735f;
+      border-style: dashed;
+    }
+
+    .bottom {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      padding: 0 26px 26px;
+    }
+
+    .panel {
+      border: 1px solid rgba(240,197,107,0.18);
+      border-radius: var(--radius);
+      background: rgba(0,0,0,0.32);
+      padding: 18px;
+    }
+
+    .panel h3 {
+      margin: 0 0 13px;
+      color: var(--bone);
+      font-size: 0.98rem;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 10px;
+    }
+
+    .breakdown div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      color: var(--smoke);
+      font-size: 0.88rem;
+    }
+
+    .breakdown strong {
+      color: var(--bone);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .actions button {
+      min-height: 44px;
+      border-radius: 12px;
+      padding: 0 18px;
+      border: 1px solid rgba(240,197,107,0.24);
+      background: rgba(255,255,255,0.05);
+      color: var(--bone);
+      font: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .actions .primary {
+      border-color: transparent;
+      background: linear-gradient(180deg, var(--brass-light), var(--brass));
+      color: #24170b;
+      font-weight: 900;
+      box-shadow: 0 14px 28px rgba(196,145,62,0.22);
+    }
+
+    .actions .red {
+      color: #ffe2dc;
+      background: linear-gradient(180deg, #9e261f, #65120e);
+      border-color: rgba(255,121,92,0.24);
+      font-weight: 900;
+    }
+
+    @media (max-width: 980px) {
+      .battlefield {
+        grid-template-columns: 1fr;
+      }
+
+      .verdict {
+        order: -1;
+      }
+
+      .fighter {
+        min-height: auto;
+      }
+
+      .bottom {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        padding: 14px;
+      }
+
+      .duel-top {
+        flex-direction: column;
+      }
+
+      .controls {
+        align-items: flex-start;
+      }
+
+      .battlefield,
+      .bottom {
+        padding: 16px;
+      }
+
+      .fighter-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .profile {
+        padding-right: 48px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="duel" aria-label="西部决斗结算预览">
+      <header class="duel-top">
+        <div class="brand">
+          <small>VOCABNOTE DUEL RESULT</small>
+          <h1>荒野决斗结算</h1>
+        </div>
+        <div class="controls">
+          <div class="seg" aria-label="视角切换">
+            <button class="active" data-view="winner">胜方视角</button>
+            <button data-view="loser">败方视角</button>
+          </div>
+          <div class="seg" aria-label="剧情切换">
+            <button class="active" data-scenario="first">首胜</button>
+            <button data-scenario="revenge">复仇</button>
+            <button data-scenario="sweep">完胜</button>
+            <button data-scenario="final">总胜</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="battlefield">
+        <article class="fighter winner" id="winnerCard">
+          <span class="rank" id="winnerRank">#2</span>
+          <div class="profile">
+            <div class="avatar-stage" id="winnerAvatarStage">
+              <svg class="crown" viewBox="0 0 64 44" aria-hidden="true">
+                <path fill="currentColor" d="M7 38h50l-4 6H11l-4-6Zm4-27 13 12 8-21 8 21 13-12-4 23H15L11 11Z"/>
+              </svg>
+              <div class="avatar" id="winnerAvatar" style="background:linear-gradient(135deg,#c95a43,#6d1816);">叶</div>
+              <span class="scar one"></span>
+              <span class="scar two"></span>
+            </div>
+            <div class="name">
+              <strong id="winnerName">叶陌钧</strong>
+              <span id="winnerMeta">217 分 · 胜率 69%</span>
+            </div>
+          </div>
+          <div class="role-stamp" id="winnerStamp">胜方</div>
+          <div class="score">
+            <label>本局得分</label>
+            <strong id="winnerScore">14</strong>
+          </div>
+          <span class="point-delta up" id="winnerDelta">积分 +12</span>
+          <div class="fighter-stats">
+            <div><span>排名变化</span><strong id="winnerMove">+1</strong></div>
+            <div><span>最高连击</span><strong id="winnerStreak">6</strong></div>
+            <div><span>败绩刻痕</span><strong id="winnerScars">0</strong></div>
+          </div>
+        </article>
+
+        <section class="verdict">
+          <div class="verdict-main">
+            <div class="round-tag" id="roundTag">第一局 · 尘埃落定</div>
+            <h2 class="title" id="mainTitle">先下一城</h2>
+            <div class="duel-score">
+              <span>BO3</span>
+              <strong id="seriesScore">1 : 0</strong>
+              <span id="seriesHint">败方仍有再战权</span>
+            </div>
+            <div class="declaration" aria-label="胜者宣言">
+              <span id="quoteType">胜者刻印</span>
+              <strong id="declarationText">开局先收下</strong>
+            </div>
+            <p class="view-note" id="viewNote">宣言已落在赛场中央，等对方决定是否再战。</p>
+          </div>
+
+          <div class="rounds">
+            <div class="rounds-head">
+              <strong>对决进程</strong>
+              <span id="rematchState">对方剩 1 次再战权</span>
+            </div>
+            <div class="round-list" id="roundList"></div>
+          </div>
+        </section>
+
+        <article class="fighter loser" id="loserCard">
+          <span class="rank" id="loserRank">#9</span>
+          <div class="profile">
+            <div class="avatar-stage loss-1" id="loserAvatarStage">
+              <div class="avatar" id="loserAvatar" style="background:linear-gradient(135deg,#4c6ea4,#1c2e54);">周</div>
+              <span class="scar one"></span>
+              <span class="scar two"></span>
+            </div>
+            <div class="name">
+              <strong id="loserName">周凛</strong>
+              <span id="loserMeta">168 分 · 胜率 57%</span>
+            </div>
+          </div>
+          <div class="role-stamp" id="loserStamp">败方</div>
+          <div class="score">
+            <label>本局得分</label>
+            <strong id="loserScore">9</strong>
+          </div>
+          <span class="point-delta down" id="loserDelta">积分 -6</span>
+          <div class="fighter-stats">
+            <div><span>排名变化</span><strong id="loserMove">-1</strong></div>
+            <div><span>最高连击</span><strong id="loserStreak">4</strong></div>
+            <div><span>败绩刻痕</span><strong id="loserScars">1</strong></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="bottom">
+        <section class="panel">
+          <h3>积分结算</h3>
+          <div class="breakdown">
+            <div><span>胜负基础分</span><strong id="basePoints">+10</strong></div>
+            <div><span>连击奖励</span><strong id="streakPoints">+4</strong></div>
+            <div><span>积分差修正</span><strong id="rankModifier">-2</strong></div>
+            <div><span>最终变化</span><strong id="finalPoints">+12</strong></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>下一步</h3>
+          <div class="actions">
+            <button class="primary">赛场回顾</button>
+            <button class="red" id="rematchButton">不服再战</button>
+            <button>返回刷题</button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      scenario: "first",
+      view: "winner"
+    };
+
+    const defaults = {
+      winnerName: "叶陌钧",
+      loserName: "周凛",
+      winnerRank: "#2",
+      loserRank: "#9",
+      winnerMeta: "217 分 · 胜率 69%",
+      loserMeta: "168 分 · 胜率 57%",
+      winnerMove: "+1",
+      loserMove: "-1",
+      winnerStreak: "6",
+      loserStreak: "4",
+      winnerAvatar: "叶",
+      loserAvatar: "周",
+      winnerLosses: 0,
+      loserLosses: 1
+    };
+
+    const scenarios = {
+      first: {
+        roundTag: "第一局 · 尘埃落定",
+        winnerTitle: "先下一城",
+        loserTitle: "被先下一城",
+        seriesScore: "1 : 0",
+        seriesHint: "败方仍有再战权",
+        quoteType: "首胜宣言",
+        declarationText: "开局先收下",
+        winnerNote: "胜者宣言已刻在场中央，等对方决定是否再战。",
+        loserNote: "这句话留在场上。再战权还在，要不要撕回去？",
+        rematchState: "对方剩 1 次再战权",
+        winnerScore: "14",
+        loserScore: "9",
+        winnerDelta: "积分 +12",
+        loserDelta: "积分 -6",
+        basePoints: "+10",
+        streakPoints: "+4",
+        rankModifier: "-2",
+        finalPoints: "+12",
+        rematchButtonWinner: "等待再战",
+        rematchButtonLoser: "不服再战",
+        rounds: [
+          ["第一局", "叶陌钧胜", "win"],
+          ["第二局", "未开始", "pending"],
+          ["第三局", "未开启", "pending"]
+        ]
+      },
+      revenge: {
+        roundTag: "第二局 · 枪声回响",
+        winnerTitle: "复仇成功",
+        loserTitle: "被扳回一局",
+        seriesScore: "1 : 1",
+        seriesHint: "决胜局待开启",
+        quoteType: "复仇宣言",
+        declarationText: "现在轮到我",
+        winnerNote: "第一道刻痕还在，但这一局你把账扳平了。",
+        loserNote: "对方把话刻回来了。下一局就是最后一枪。",
+        rematchState: "另一方可开启决胜局",
+        winnerName: "周凛",
+        loserName: "叶陌钧",
+        winnerRank: "#9",
+        loserRank: "#2",
+        winnerMeta: "174 分 · 胜率 58%",
+        loserMeta: "211 分 · 胜率 68%",
+        winnerAvatar: "周",
+        loserAvatar: "叶",
+        winnerLosses: 1,
+        loserLosses: 1,
+        winnerScore: "13",
+        loserScore: "11",
+        winnerDelta: "积分 +16",
+        loserDelta: "积分 -10",
+        winnerMove: "+2",
+        loserMove: "-1",
+        winnerStreak: "5",
+        loserStreak: "4",
+        basePoints: "+10",
+        streakPoints: "+2",
+        rankModifier: "+4",
+        finalPoints: "+16",
+        rematchButtonWinner: "等待决胜",
+        rematchButtonLoser: "开启决胜局",
+        rounds: [
+          ["第一局", "叶陌钧胜", "loss"],
+          ["第二局", "周凛胜", "win"],
+          ["第三局", "待确认", "pending"]
+        ]
+      },
+      sweep: {
+        roundTag: "第二局 · 终局无声",
+        winnerTitle: "两局终结",
+        loserTitle: "遭遇完胜",
+        seriesScore: "2 : 0",
+        seriesHint: "本组对决结束",
+        quoteType: "完胜宣言",
+        declarationText: "两局够了",
+        winnerNote: "对方头像留下交叉刻痕，本组对决到此为止。",
+        loserNote: "两道刻痕已经交叉。想翻盘，只能下次重新开局。",
+        rematchState: "已无再战机会",
+        loserLosses: 2,
+        winnerScore: "16",
+        loserScore: "8",
+        winnerDelta: "积分 +10",
+        loserDelta: "积分 -7",
+        winnerMove: "+1",
+        loserMove: "-2",
+        winnerStreak: "8",
+        loserStreak: "3",
+        basePoints: "+10",
+        streakPoints: "+2",
+        rankModifier: "-2",
+        finalPoints: "+10",
+        rematchButtonWinner: "对决已结束",
+        rematchButtonLoser: "对决已结束",
+        rounds: [
+          ["第一局", "叶陌钧胜", "win"],
+          ["第二局", "叶陌钧胜", "win"],
+          ["第三局", "未开启", "pending"]
+        ]
+      },
+      final: {
+        roundTag: "第三局 · 最后一枪",
+        winnerTitle: "决胜加冕",
+        loserTitle: "决胜落败",
+        seriesScore: "2 : 1",
+        seriesHint: "BO3 最终胜者",
+        quoteType: "总胜宣言",
+        declarationText: "这局我收了",
+        winnerNote: "三局打完，最后的刻印属于你。",
+        loserNote: "差一枪。败绩交叉在头像上，回顾里找回这一题。",
+        rematchState: "三局结束",
+        winnerLosses: 1,
+        loserLosses: 2,
+        winnerScore: "15",
+        loserScore: "13",
+        winnerDelta: "积分 +18",
+        loserDelta: "积分 -9",
+        winnerMove: "+3",
+        loserMove: "-2",
+        winnerStreak: "7",
+        loserStreak: "6",
+        basePoints: "+10",
+        streakPoints: "+4",
+        rankModifier: "+4",
+        finalPoints: "+18",
+        rematchButtonWinner: "对决已结束",
+        rematchButtonLoser: "对决已结束",
+        rounds: [
+          ["第一局", "周凛胜", "loss"],
+          ["第二局", "叶陌钧胜", "win"],
+          ["第三局", "叶陌钧胜", "win"]
+        ]
+      }
+    };
+
+    function setText(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    }
+
+    function setLosses(id, count) {
+      const node = document.getElementById(id);
+      node.classList.remove("loss-0", "loss-1", "loss-2");
+      node.classList.add("loss-" + Math.max(0, Math.min(2, Number(count) || 0)));
+    }
+
+    function renderRounds(rows) {
+      document.getElementById("roundList").innerHTML = rows.map(([label, result, cls]) =>
+        `<div class="round ${cls}"><span>${label}</span><strong>${result}</strong></div>`
+      ).join("");
+    }
+
+    function apply() {
+      const data = { ...defaults, ...scenarios[state.scenario] };
+      const isWinnerView = state.view === "winner";
+
+      setText("mainTitle", isWinnerView ? data.winnerTitle : data.loserTitle);
+      setText("viewNote", isWinnerView ? data.winnerNote : data.loserNote);
+      setText("rematchButton", isWinnerView ? data.rematchButtonWinner : data.rematchButtonLoser);
+
+      [
+        "roundTag", "seriesScore", "seriesHint", "quoteType", "declarationText",
+        "rematchState", "winnerName", "loserName", "winnerRank", "loserRank",
+        "winnerMeta", "loserMeta", "winnerScore", "loserScore", "winnerDelta",
+        "loserDelta", "winnerMove", "loserMove", "winnerStreak", "loserStreak",
+        "basePoints", "streakPoints", "rankModifier", "finalPoints"
+      ].forEach((key) => setText(key, data[key]));
+
+      setText("winnerAvatar", data.winnerAvatar);
+      setText("loserAvatar", data.loserAvatar);
+      setText("winnerScars", data.winnerLosses);
+      setText("loserScars", data.loserLosses);
+      setLosses("winnerAvatarStage", data.winnerLosses);
+      setLosses("loserAvatarStage", data.loserLosses);
+      renderRounds(data.rounds);
+
+      document.querySelectorAll("[data-scenario]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.scenario === state.scenario);
+      });
+      document.querySelectorAll("[data-view]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === state.view);
+      });
+    }
+
+    document.querySelectorAll("[data-scenario]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.scenario = button.dataset.scenario;
+        apply();
+      });
+    });
+
+    document.querySelectorAll("[data-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.view = button.dataset.view;
+        apply();
+      });
+    });
+
+    apply();
+  </script>
+</body>
+</html>

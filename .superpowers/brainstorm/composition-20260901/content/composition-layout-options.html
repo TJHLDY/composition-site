@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作文简化版 - 首页布局选择</title>
+  <style>
+    :root { --paper:#faf8f5; --ink:#253449; --muted:#768195; --line:#dfe4eb; --blue:#4a6fa5; --blue-soft:#eaf1fb; --card:#fff; --warm:#f3eee7; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#eef1f5; color:var(--ink); font-family:"Microsoft YaHei", "Segoe UI", sans-serif; }
+    .page { max-width:1450px; margin:0 auto; padding:34px 28px 48px; }
+    .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:7px 0 8px; font-size:28px; }
+    .intro { margin:0 0 26px; color:var(--muted); line-height:1.7; }
+    .choices { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .choice { background:#fff; border:2px solid transparent; border-radius:20px; padding:16px; box-shadow:0 10px 28px rgba(39,57,81,.10); cursor:pointer; transition:.2s ease; }
+    .choice:hover, .choice.selected { border-color:var(--blue); transform:translateY(-3px); box-shadow:0 16px 34px rgba(39,57,81,.16); }
+    .choice-head { display:flex; gap:12px; align-items:flex-start; padding:0 4px 13px; }
+    .badge { width:29px; height:29px; border-radius:50%; color:white; background:var(--blue); display:grid; place-items:center; font-size:14px; font-weight:800; flex:none; }
+    .choice h2 { font-size:18px; margin:0 0 4px; }
+    .choice p { color:var(--muted); font-size:13px; line-height:1.5; margin:0; }
+    .preview { border:1px solid #ccd4df; border-radius:13px; overflow:hidden; min-height:480px; background:var(--paper); box-shadow:inset 0 0 0 7px #fff; }
+    .appbar { height:54px; padding:0 16px 0 19px; display:flex; align-items:center; justify-content:space-between; background:#fff; border-bottom:1px solid var(--line); }
+    .brand { font-size:16px; font-weight:800; letter-spacing:-.02em; } .brand b { color:var(--blue); }
+    .app-actions { display:flex; gap:9px; align-items:center; }
+    .round { width:31px; height:31px; display:grid; place-items:center; border:0; border-radius:50%; background:var(--blue); color:white; font-size:22px; line-height:1; }
+    .moon { color:#768195; font-size:18px; padding:5px; }
+    .view { padding:22px 24px; }
+    .topline { display:flex; justify-content:space-between; align-items:end; margin-bottom:15px; }
+    .topline h3 { margin:0; font-size:21px; } .topline span { color:var(--muted); font-size:12px; }
+    .file-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .file { position:relative; background:#fff; min-height:133px; padding:17px 15px 14px 19px; border:1px solid var(--line); border-radius:10px; box-shadow:0 3px 7px rgba(48,59,77,.05); }
+    .file:before { content:""; position:absolute; left:0; top:17px; bottom:17px; width:3px; border-radius:2px; background:#c7d6eb; }
+    .file-icon { color:var(--blue); font-size:15px; margin-right:5px; } .file-title { font-size:14px; font-weight:800; }
+    .excerpt { margin:12px 0 10px; color:#758093; font-family:Georgia,serif; font-size:12px; line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .meta { color:#9ca6b3; font-size:11px; }
+    .empty-note { margin-top:17px; padding:12px 14px; background:var(--blue-soft); color:#55729b; border-radius:8px; font-size:12px; }
+    .split-app { display:grid; grid-template-columns:155px 1fr; min-height:426px; }
+    .sidebar { padding:16px 10px; border-right:1px solid var(--line); background:#fff; }
+    .side-title { color:#8792a3; font-size:11px; letter-spacing:.08em; margin:0 7px 10px; }
+    .side-file { padding:10px 8px; border-radius:7px; font-size:11px; line-height:1.35; color:#627086; margin-bottom:4px; }
+    .side-file.active { color:#304a6d; background:var(--blue-soft); font-weight:800; }
+    .reader { padding:19px 22px; background:var(--paper); }
+    .back { color:var(--blue); font-size:12px; font-weight:800; } .reader h3 { font-size:18px; margin:14px 0 4px; } .reader .date { color:#98a2af; font-size:11px; }
+    .essay { margin:17px 0 13px; padding:17px 19px; border:1px solid #e4e0da; border-radius:8px; background:#fffdf9; color:#394555; font-family:Georgia,"Times New Roman",serif; font-size:12px; line-height:1.82; }
+    .word { color:#306197; background:#eaf2fa; border-radius:3px; padding:1px 2px; cursor:pointer; }
+    .note-section { border-top:1px solid var(--line); padding-top:12px; } .note-title { font-size:13px; font-weight:800; margin-bottom:8px; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; }.chip { padding:5px 7px; border-radius:5px; background:#fff; border:1px solid var(--line); font-size:10px; color:#526174; }.chip b { color:var(--blue); }
+    .compare-note { margin-top:18px; padding:14px 17px; border-radius:10px; background:#263b59; color:#eaf1fb; font-size:13px; line-height:1.6; }
+    .compare-note b { color:#fff; }
+    @media (max-width:900px) { .choices { grid-template-columns:1fr; } }
+    @media (max-width:560px) { .page{padding:22px 12px;} h1{font-size:23px;} .view{padding:16px;} .file-grid{grid-template-columns:1fr;} .split-app{grid-template-columns:115px 1fr;} .reader{padding:15px;} .sidebar{padding:12px 6px;} .choice{padding:11px;} }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">作文简化版 · 第一步</div>
+    <h1>你更想从哪种“我的作文”首页进入？</h1>
+    <p class="intro">两种方案都会保留右上角「＋」新建题目与范文、点击英文词查译、以及每篇作文的生词/短语/笔记。点击一张方案卡即可选择。</p>
+
+    <div class="choices">
+      <section class="choice" data-choice="file-grid" onclick="toggleSelect(this)">
+        <div class="choice-head"><div class="badge">A</div><div><h2>文件架列表 → 阅读详情</h2><p>首页像个人范文文件夹；点开一篇后全屏专心阅读。</p></div></div>
+        <div class="preview">
+          <div class="appbar"><div class="brand">Vocab<b>Note</b> · 作文</div><div class="app-actions"><span class="moon">☾</span><button class="round" aria-label="新建">＋</button></div></div>
+          <div class="view">
+            <div class="topline"><h3>我的作文</h3><span>共 12 篇</span></div>
+            <div class="file-grid">
+              <article class="file"><div><span class="file-icon">▤</span><span class="file-title">2026 年英语二大作文</span></div><div class="excerpt">The Importance of Environmental Protection in Our Daily Life...</div><div class="meta">3 个笔记 · 8 月 31 日</div></article>
+              <article class="file"><div><span class="file-icon">▤</span><span class="file-title">科技改变生活</span></div><div class="excerpt">With the rapid development of technology, our way of life...</div><div class="meta">5 个笔记 · 8 月 28 日</div></article>
+              <article class="file"><div><span class="file-icon">▤</span><span class="file-title">成长与责任</span></div><div class="excerpt">Every young person should learn to take responsibility...</div><div class="meta">2 个笔记 · 8 月 20 日</div></article>
+              <article class="file"><div><span class="file-icon">▤</span><span class="file-title">我的大学生活</span></div><div class="excerpt">University is an important stage for students to explore...</div><div class="meta">6 个笔记 · 8 月 12 日</div></article>
+            </div>
+            <div class="empty-note">＋ 新建范文时只需填写「题目」和「范文」，保存后会出现在这里。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="choice" data-choice="split-reader" onclick="toggleSelect(this)">
+        <div class="choice-head"><div class="badge">B</div><div><h2>文件列表 + 右侧即时预览</h2><p>桌面上快速切换范文，不必先进入独立阅读页。</p></div></div>
+        <div class="preview">
+          <div class="appbar"><div class="brand">Vocab<b>Note</b> · 作文</div><div class="app-actions"><span class="moon">☾</span><button class="round" aria-label="新建">＋</button></div></div>
+          <div class="split-app">
+            <aside class="sidebar"><div class="side-title">我的作文 · 12</div><div class="side-file active">▤ 环保主题范文</div><div class="side-file">▤ 科技改变生活</div><div class="side-file">▤ 成长与责任</div><div class="side-file">▤ 大学生活</div></aside>
+            <article class="reader"><div class="back">← 作文列表</div><h3>环保主题范文</h3><div class="date">2026 年 8 月 31 日</div><div class="essay">Environmental protection has become an important topic in modern society. Everyone can make a <span class="word">meaningful</span> contribution by reducing waste and choosing a more <span class="word">sustainable</span> lifestyle. Small actions can create a better future for all of us.</div><div class="note-section"><div class="note-title">生词与短语笔记 <span style="color:#9ca6b3;font-weight:400">3</span></div><div class="chips"><span class="chip"><b>sustainable</b> · 可持续的</span><span class="chip"><b>make a contribution</b> · 做贡献</span><span class="chip">♢ 注意搭配</span></div></div></article>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="compare-note"><b>我的建议：</b>选 A。它最贴近你说的“题目像文件一样排列”，手机上也天然好用；点进去再进入一页安静的范文阅读和笔记。</div>
+  </main>
+</body>
+</html>

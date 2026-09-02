@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作文简化版 - 高质量语境翻译</title>
+  <style>
+    :root{--ink:#26364a;--muted:#748196;--line:#dbe4ee;--blue:#4a6fa5;--blue2:#304f79;--blueSoft:#eaf2fb;--green:#3e8068;--orange:#b77637;--bg:#eef1f5;--paper:#fff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Microsoft YaHei","Segoe UI",sans-serif}.page{max-width:1260px;margin:auto;padding:33px 25px 49px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.13em;color:var(--blue)}h1{font-size:28px;margin:7px 0}.intro{color:var(--muted);line-height:1.7;margin:0 0 24px}.flow{display:grid;grid-template-columns:1fr 44px 1.17fr 44px 1.08fr;align-items:stretch;margin:0 0 23px}.node{min-height:226px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:0 7px 17px rgba(38,54,74,.07)}.node.blue{border-color:#bdd1e8;background:#f8fbff}.node.dark{border:0;background:#263b59;color:#eef5fd}.arrow{display:grid;place-items:center;color:#91a4ba;font-size:25px}.tag{font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--blue);text-transform:uppercase}.dark .tag{color:#acc6e5}.node h2{font-size:16px;margin:7px 0 9px}.node p{font-size:12px;color:var(--muted);line-height:1.55;margin:0}.dark p{color:#c8d8e9}.sample{margin-top:14px;padding:10px;border-radius:7px;background:#f4f7fa;font-size:11px;line-height:1.65;color:#526277}.dark .sample{background:#304967;color:#dce9f6}.selected{color:#2d629b;background:#dcecfb;border-radius:3px;padding:1px 3px;font-weight:800}.rows{margin-top:13px;display:flex;flex-direction:column;gap:6px}.row{font-size:10px;background:#f4f7fa;border-radius:5px;padding:6px 7px;color:#617185}.row b{color:#405e85}.dark .row{background:#304967;color:#c9d9ea}.dark .row b{color:#fff}.result{margin-top:14px;border-radius:7px;padding:10px;background:#f1f8f5;border:1px solid #cce6d8}.result b{font-size:12px;color:#34765d}.result p{font-size:10px;margin:4px 0 0;color:#547368}.fallback{display:flex;align-items:center;gap:8px;margin-top:13px;padding:8px 9px;border-radius:6px;background:#fff4e7;color:#967141;font-size:10px;line-height:1.45}.fallback span{font-size:16px}.quality{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}.qualityCard{background:#fff;border:1px solid var(--line);border-radius:11px;padding:15px}.icon{width:29px;height:29px;display:grid;place-items:center;border-radius:8px;background:var(--blueSoft);color:var(--blue);font-size:16px}.qualityCard h3{font-size:14px;margin:10px 0 5px}.qualityCard p{font-size:11px;color:var(--muted);line-height:1.55;margin:0}.answer{margin-top:21px;padding:16px 18px;border-radius:10px;background:#263b59;color:#ecf4fd;line-height:1.65;font-size:13px}.answer b{color:#fff}.answer small{display:block;color:#bfd2e6;font-size:11px;margin-top:5px}@media(max-width:900px){.flow{grid-template-columns:1fr;gap:10px}.arrow{height:26px;transform:rotate(90deg)}.quality{grid-template-columns:1fr 1fr}}@media(max-width:560px){.page{padding:21px 12px}.page h1{font-size:22px}.quality{grid-template-columns:1fr}.node{min-height:0}.flow{margin-bottom:15px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">高级翻译 · 推荐架构</div>
+    <h1>用“语境解释器”，而不只是机器直译</h1>
+    <p class="intro">词或短语被选中后，后端只取必要的原句与附近语境，要求 AI 返回固定结构；用户可以看、改、再保存到该篇笔记。</p>
+    <section class="flow">
+      <article class="node"><div class="tag">1 · 用户选择</div><h2>保留准确位置和原句</h2><p>不是把整篇作文、账号资料或历史笔记全发出去。</p><div class="sample">Everyone can make a <span class="selected">meaningful contribution</span> by reducing waste.</div><div class="rows"><div class="row"><b>选中：</b>meaningful contribution</div><div class="row"><b>语境：</b>所在句 + 邻近一句</div><div class="row"><b>目标：</b>英 → 简体中文</div></div></article>
+      <div class="arrow">→</div>
+      <article class="node blue"><div class="tag">2 · 我们的后端</div><h2>校验、缓存、组织提示词</h2><p>确认用户拥有这篇作文，限制长度，先复用相同语境的结果，再决定是否请求模型。</p><div class="rows"><div class="row"><b>缓存键：</b>短语 + 上下文 + 模型版本</div><div class="row"><b>限流：</b>防止误触和成本失控</div><div class="row"><b>超时：</b>快速返回，不让阅读页卡住</div></div><div class="fallback"><span>↳</span>模型暂不可用时，退回现有“短语直译”，并明确标记为机器翻译。</div></article>
+      <div class="arrow">→</div>
+      <article class="node dark"><div class="tag">3 · 可配置 AI 服务</div><h2>只返回可用的结构化答案</h2><p>模型不直接生成网页内容，而是按 JSON 合同返回，前端稳定展示。</p><div class="sample">{<br>  "translation": "有意义的贡献",<br>  "sense": "这里指对环保的实际贡献",<br>  "collocation": "make a contribution to ...",<br>  "usageTip": "作文中可替换为 play a role in",<br>  "confidence": "high"<br>}</div><div class="result"><b>前端显示</b><p>中文释义 · 此处含义 · 搭配 · 写作建议 · 允许手改后保存</p></div></article>
+    </section>
+    <section class="quality">
+      <article class="qualityCard"><div class="icon">⌁</div><h3>给足语境</h3><p>至少带上所在句；歧义或代词相关时附带相邻句，而不是只翻一个孤立单词。</p></article>
+      <article class="qualityCard"><div class="icon">{ }</div><h3>固定输出合同</h3><p>要求模型只返回翻译、此处含义、搭配和简短写作建议，避免前端解析自由文本。</p></article>
+      <article class="qualityCard"><div class="icon">✎</div><h3>人可修正</h3><p>AI 是建议，不是不可改的答案；用户能改中文释义和自己的笔记，再保存。</p></article>
+      <article class="qualityCard"><div class="icon">◷</div><h3>稳定与可控</h3><p>缓存、超时、限流和直译兜底，让少数外部服务失败不影响读作文。</p></article>
+    </section>
+    <div class="answer"><b>为什么这比当前翻译“高级”：</b>当前接口只能收到文本并返回一段译文；这个方案让模型看见准确语境，并强制产出学习型解释。<small>服务实现会做成可替换的 AI 提供方适配器，避免把产品锁死在一个账号或厂商上。</small></div>
+  </main>
+</body>
+</html>

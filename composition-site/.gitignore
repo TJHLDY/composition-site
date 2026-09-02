@@ -1,0 +1,11 @@
+# Local standalone runtime data
+server/data/
+server/target/
+server/*.log
+*.mv.db
+*.trace.db
+
+# Local secrets and deployment overrides
+.env
+.env.*
+!*.env.example
