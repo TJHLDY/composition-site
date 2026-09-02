@@ -98,7 +98,9 @@
   let phraseActionTimer = null;
   let preloadRequestId = 0;
   let isPreloadingGlossary = false;
-  const PRELOAD_BATCH_SIZE = 7;
+  const PRELOAD_BATCH_SIZE_BASE = 10;
+  const PRELOAD_REQUEST_TIMEOUT_MS = 9000;
+  const PRELOAD_PROGRESS_STEP = 8;
 
   function normalizeAnnotation(annotation) {
     return {
@@ -524,7 +526,7 @@
     return `${essay.id}:${essay.contentVersion}:${startOffset}:${endOffset}`;
   }
 
-  function requestExplanation(essay, selection) {
+  function requestExplanation(essay, selection, requestOptions = {}) {
     const cacheKey = explanationCacheKey(essay, selection.startOffset, selection.endOffset);
     if (explanationCache.has(cacheKey)) return explanationCache.get(cacheKey);
     if (Date.now() < translationUnavailableUntil) {
@@ -536,7 +538,7 @@
       kind: selection.kind,
       contentVersion: essay.contentVersion
     };
-    const pending = api.explainSelection(essay.id, payload).catch((error) => {
+    const pending = api.explainSelection(essay.id, payload, requestOptions).catch((error) => {
       explanationCache.delete(cacheKey);
       if (error instanceof ApiError && error.status === 503) {
         translationUnavailableUntil = Date.now() + 60_000;
@@ -545,6 +547,13 @@
     });
     explanationCache.set(cacheKey, pending);
     return pending;
+  }
+
+  function preloadConcurrency(requestCount) {
+    const base = PRELOAD_BATCH_SIZE_BASE;
+    const hardware = Number(navigator.hardwareConcurrency) || 4;
+    const cpuScale = Math.max(3, Math.min(base, Math.max(2, hardware)));
+    return Math.max(3, Math.min(cpuScale, Math.max(1, Math.ceil(requestCount / 20))));
   }
 
   async function preloadCurrentEssayExplanations() {
@@ -583,6 +592,8 @@
     let failCount = 0;
     let idx = 0;
     const total = requests.length;
+    const concurrency = preloadConcurrency(total);
+    let lastProgress = 0;
 
     const runWorker = async () => {
       while (idx < total) {
@@ -594,6 +605,8 @@
             kind: 'word',
             startOffset: target.startOffset,
             endOffset: target.endOffset
+          }, {
+            timeoutMs: PRELOAD_REQUEST_TIMEOUT_MS
           });
           successCount += 1;
         } catch (error) {
@@ -604,16 +617,17 @@
         }
         if (token !== preloadRequestId || !isPreloadingGlossary) return;
         if (total > 20) {
-          setExplanationLoading(
-            true,
-            `正在预加载本篇单词…${Math.min(successCount + failCount, total)} / ${total}`
-          );
+          const done = Math.min(successCount + failCount, total);
+          if (done === 1 || done === total || done - lastProgress >= PRELOAD_PROGRESS_STEP) {
+            lastProgress = done;
+            setExplanationLoading(true, `正在预加载本篇单词…${done} / ${total}`);
+          }
         }
       }
     };
 
     try {
-      const workers = Array.from({ length: Math.min(PRELOAD_BATCH_SIZE, Math.max(1, requests.length)) }, runWorker);
+      const workers = Array.from({ length: Math.min(concurrency, Math.max(1, requests.length)) }, runWorker);
       await Promise.all(workers);
     } finally {
       if (token === preloadRequestId) {

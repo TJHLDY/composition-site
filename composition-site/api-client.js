@@ -36,23 +36,38 @@
       const {
         method = 'GET',
         body,
-        requiresAuth = true
+        requiresAuth = true,
+        timeoutMs
       } = requestOptions;
       const headers = { Accept: 'application/json' };
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       const token = getToken();
       if (requiresAuth && token) headers.Authorization = `Bearer ${token}`;
 
+      const controller = timeoutMs ? new AbortController() : null;
+      let timeoutId = null;
+      if (controller) {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+        }, Math.max(1, Number(timeoutMs)));
+      }
+
       let response;
       try {
         response = await fetchImpl(path, {
           method,
           headers,
-          body: body === undefined ? undefined : JSON.stringify(body)
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: controller ? controller.signal : undefined
         });
       } catch (error) {
+        if (controller) clearTimeout(timeoutId);
+        if (error && (error.name === 'AbortError')) {
+          throw new ApiError(0, '请求超时，请稍后再试。');
+        }
         throw new ApiError(0, '无法连接独立服务，请确认已从 8088 端口打开网站。');
       }
+      if (controller) clearTimeout(timeoutId);
 
       const rawBody = await response.text();
       let payload = null;
@@ -93,9 +108,9 @@
       listCompositions: () => request('/api/compositions'),
       createComposition: (payload) => request('/api/compositions', { method: 'POST', body: payload }),
       readComposition: (compositionId) => request(`/api/compositions/${encodeURIComponent(compositionId)}`),
-      explainSelection: (compositionId, payload) => request(
+      explainSelection: (compositionId, payload, requestOptions = {}) => request(
         `/api/compositions/${encodeURIComponent(compositionId)}/explanations`,
-        { method: 'POST', body: payload }
+        { method: 'POST', body: payload, ...requestOptions }
       ),
       saveAnnotation: (compositionId, payload) => request(
         `/api/compositions/${encodeURIComponent(compositionId)}/annotations`,
