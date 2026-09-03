@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: fanwenjia-composition
+    env: docker
+    plan: free
+    dockerfilePath: ./composition-site/Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8088
+      - key: COMPOSITION_MAIL_HOST
+        value: smtp.163.com
+      - key: COMPOSITION_MAIL_PORT
+        value: 465
+      - key: COMPOSITION_MAIL_USERNAME
+        value: VocabNote@163.com
+      - key: TRANSLATION_BASE_URL
+        value: https://taotoken.net/api/v1
+      - key: TRANSLATION_TEMPERATURE
+        value: 0
+      - key: TRANSLATION_STRUCTURED_OUTPUT
+        value: true
+      - key: TRANSLATION_DISABLE_THINKING
+        value: true
+      - key: COMPOSITION_DB_URL
+        value: jdbc:mysql://your-mysql-host:3306/fanwenjia
+      - key: COMPOSITION_DB_USERNAME
+        sync: false
+      - key: COMPOSITION_DB_PASSWORD
+        sync: false
+      - key: TRANSLATION_API_KEY
+        sync: false
+      - key: TRANSLATION_MODEL
+        sync: false

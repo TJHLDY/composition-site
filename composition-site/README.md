@@ -14,6 +14,23 @@ mvn -f .\composition-site\server\pom.xml spring-boot:run
 
 本地默认使用 `composition-site/server/data/` 下的 H2 数据库。该目录、构建产物和密钥文件都已被 `composition-site/.gitignore` 排除。
 
+## 给别人用（快速发布）
+
+本项目已经支持直接用 Docker + Render 一键部署。推荐流程如下：
+
+1. 把这个仓库推到 GitHub（你已经在做这步了）。
+2. 访问 Render，创建一个新的 **Web Service**，选择该仓库。
+3. Render 会识别 `composition-site/render.yaml`。
+4. 在 Deploy 设置里填环境变量：
+   - `TRANSLATION_API_KEY`（你的模型密钥）
+   - `TRANSLATION_MODEL`（你的模型名，如 `glm-4-plus`）
+   - `COMPOSITION_MAIL_USERNAME` / `COMPOSITION_MAIL_PASSWORD`（可选，验证码邮件用）
+5. 部署完成后会拿到一个公开 URL，直接把链接发给别人即可。
+
+说明：
+- 本站点前端和后端是同一个 Spring Boot 服务，Render 直接暴露一个公开接口，不需要额外配置。
+- 默认数据库是 H2，如果要迁移到 MySQL 可配置 `mysql` profile（见下方 MySQL 部分）。
+
 ## 已实现
 
 - 独立注册、登录、登出和 30 天不透明会话；默认只把会话令牌放在 `sessionStorage`。登录可勾选「七天内自动登录」：令牌与邮箱在本设备保留 7 天用于自动进入，密码永不写入浏览器存储；退出登录或过期后自动清除。
