@@ -1,5 +1,7 @@
 package site.fanwenjia.auth;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
@@ -15,6 +17,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 class SmtpVerificationEmailSender implements VerificationEmailSender {
 
+    private static final Logger log = LoggerFactory.getLogger(SmtpVerificationEmailSender.class);
+
     private final JavaMailSender mailSender;
     private final String from;
     private final boolean configured;
@@ -27,6 +31,7 @@ class SmtpVerificationEmailSender implements VerificationEmailSender {
         this.mailSender = mailSender;
         this.from = from;
         this.configured = password != null && !password.isBlank();
+        log.info("SMTP sender initialized: from={}, configured={}", from, configured);
     }
 
     @Override
@@ -36,15 +41,18 @@ class SmtpVerificationEmailSender implements VerificationEmailSender {
                     "邮件服务未配置:请在服务端设置 COMPOSITION_MAIL_PASSWORD 后重试");
         }
         try {
+            log.info("Sending verification email to={}, purpose={}", to, purpose);
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(from);
             message.setTo(to);
             message.setSubject(purpose.subject);
             message.setText("您的验证码是:" + code + ",5 分钟内有效。请勿泄露给他人。");
             mailSender.send(message);
+            log.info("Verification email sent successfully to={}", to);
         } catch (MailException exception) {
+            log.error("Failed to send verification email to={}: {}", to, exception.getMessage(), exception);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "验证码邮件发送失败,请稍后重试", exception);
+                    "验证码邮件发送失败: " + exception.getMessage(), exception);
         }
     }
 }
