@@ -6,8 +6,6 @@ services:
     dockerfilePath: ./composition-site/Dockerfile
     healthCheckPath: /
     envVars:
-      - key: PORT
-        value: "8088"
       - key: COMPOSITION_MAIL_HOST
         value: smtp.163.com
       - key: COMPOSITION_MAIL_PORT
