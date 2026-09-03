@@ -18,14 +18,15 @@ spring:
         jdbc:
           time_zone: UTC
   mail:
-    host: ${COMPOSITION_MAIL_HOST:smtp.163.com}
-    port: ${COMPOSITION_MAIL_PORT:465}
-    username: ${COMPOSITION_MAIL_USERNAME:VocabNote@163.com}
+    host: ${COMPOSITION_MAIL_HOST:smtp.gmail.com}
+    port: ${COMPOSITION_MAIL_PORT:587}
+    username: ${COMPOSITION_MAIL_USERNAME:}
     password: ${COMPOSITION_MAIL_PASSWORD:}
     default-encoding: UTF-8
     properties:
       mail.smtp.auth: true
-      mail.smtp.ssl.enable: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.ssl.enable: false
       mail.smtp.connectiontimeout: 5000
       mail.smtp.timeout: 10000
       mail.smtp.writetimeout: 5000

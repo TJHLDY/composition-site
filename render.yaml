@@ -9,7 +9,7 @@ services:
       - key: COMPOSITION_MAIL_HOST
         value: smtp.gmail.com
       - key: COMPOSITION_MAIL_PORT
-        value: "465"
+        value: "587"
       - key: COMPOSITION_MAIL_USERNAME
         value: tjhldy6666@gmail.com
       - key: COMPOSITION_MAIL_PASSWORD
