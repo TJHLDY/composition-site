@@ -4,11 +4,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,21 +26,36 @@ public class AuthService {
     private final UserAccountRepository userAccountRepository;
     private final UserSessionRepository userSessionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final VerificationCodeStore verificationCodeStore;
+    private final VerificationEmailSender verificationEmailSender;
+    private final Duration codeTtl;
+    private final Duration codeCooldown;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(
             UserAccountRepository userAccountRepository,
             UserSessionRepository userSessionRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            VerificationCodeStore verificationCodeStore,
+            VerificationEmailSender verificationEmailSender,
+            @Value("${composition.auth.code-expire-minutes:5}") long codeExpireMinutes,
+            @Value("${composition.auth.code-resend-seconds:60}") long codeResendSeconds
     ) {
         this.userAccountRepository = userAccountRepository;
         this.userSessionRepository = userSessionRepository;
         this.passwordEncoder = passwordEncoder;
+        this.verificationCodeStore = verificationCodeStore;
+        this.verificationEmailSender = verificationEmailSender;
+        this.codeTtl = Duration.ofMinutes(codeExpireMinutes);
+        this.codeCooldown = Duration.ofSeconds(codeResendSeconds);
     }
 
     @Transactional
     public AuthResult register(RegisterRequest request) {
         String email = normalizeEmail(request.email());
+        if (!verificationCodeStore.verify(VerificationPurpose.REGISTER, email, request.code())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码不正确或已过期");
+        }
         if (userAccountRepository.findByEmail(email).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已经注册");
         }
@@ -48,6 +65,52 @@ public class AuthService {
                 passwordEncoder.encode(request.password())
         ));
         return issueSession(user);
+    }
+
+    @Transactional
+    public void sendRegisterCode(SendCodeRequest request) {
+        String email = normalizeEmail(request.email());
+        if (userAccountRepository.findByEmail(email).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已经注册,请直接登录或重置密码");
+        }
+        issueCode(VerificationPurpose.REGISTER, email);
+    }
+
+    @Transactional
+    public void sendPasswordResetCode(SendCodeRequest request) {
+        String email = normalizeEmail(request.email());
+        if (userAccountRepository.findByEmail(email).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "该邮箱尚未注册");
+        }
+        issueCode(VerificationPurpose.PASSWORD_RESET, email);
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        String email = normalizeEmail(request.email());
+        if (!verificationCodeStore.verify(VerificationPurpose.PASSWORD_RESET, email, request.code())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码不正确或已过期");
+        }
+        UserAccount user = userAccountRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "该邮箱尚未注册"));
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userAccountRepository.save(user);
+        // 密码被重置后旧会话一律作废,防止遗留在其他设备上的登录态继续生效。
+        userSessionRepository.deleteByUser_Id(user.getId());
+    }
+
+    private void issueCode(VerificationPurpose purpose, String email) {
+        if (!verificationCodeStore.canIssue(purpose, email, codeCooldown)) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "验证码已发送,请一分钟后再试");
+        }
+        String code = verificationCodeStore.issue(purpose, email, codeTtl);
+        try {
+            verificationEmailSender.send(email, code, purpose);
+        } catch (RuntimeException exception) {
+            // 发信失败就把刚发的码作废,用户可立即重试而不用等冷却。
+            verificationCodeStore.discard(purpose, email);
+            throw exception;
+        }
     }
 
     @Transactional

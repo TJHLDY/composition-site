@@ -17,10 +17,24 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  mail:
+    host: ${COMPOSITION_MAIL_HOST:smtp.163.com}
+    port: ${COMPOSITION_MAIL_PORT:465}
+    username: ${COMPOSITION_MAIL_USERNAME:VocabNote@163.com}
+    password: ${COMPOSITION_MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
 
 composition:
+  auth:
+    code-expire-minutes: 5
+    code-resend-seconds: 60
   translation:
-    zhipu:
-      api-key: ${ZHIPU_API_KEY:}
-      base-url: ${ZHIPU_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
-      model: ${ZHIPU_MODEL:glm-5.2}
+    provider:
+      api-key: ${TRANSLATION_API_KEY:}
+      base-url: ${TRANSLATION_BASE_URL:https://taotoken.net/api/v1}
+      model: ${TRANSLATION_MODEL:}
+      temperature: ${TRANSLATION_TEMPERATURE:0}
+      structured-output: ${TRANSLATION_STRUCTURED_OUTPUT:true}

@@ -49,6 +49,10 @@ const styles = read('styles.css');
   'id="preload-glossary-button"',
   'id="auth-gate"',
   'id="auth-form"',
+  'id="auth-mode-toggle"',
+  'id="auth-code"',
+  'id="send-code-button"',
+  'id="forgot-password-link"',
   'id="remember-me"',
   'id="logout-button"',
   'src="api-client.js"'
@@ -95,6 +99,17 @@ assert.match(
   assert.ok(script.includes(requiredBehavior), `Expected preview behavior: ${requiredBehavior}`);
 });
 assert.ok(apiClient.includes('deleteComposition'), 'The browser client must be able to delete a composition.');
+assert.ok(apiClient.includes('/api/auth/register/send-code'), 'The browser client must be able to request a register code.');
+assert.ok(apiClient.includes('/api/auth/forgot-password/send-code'), 'The browser client must be able to request a password-reset code.');
+assert.ok(apiClient.includes('/api/auth/forgot-password/reset'), 'The browser client must be able to submit a password reset.');
+assert.ok(
+  script.includes('{ email, password, displayName, code }'),
+  'Registration must submit the emailed verification code.'
+);
+assert.ok(script.includes('requestVerificationCode'), 'The code request button needs its own busy/countdown handling.');
+assert.ok(script.includes('重新发送'), 'The send-code button must show a resend cooldown.');
+assert.ok(script.includes("'reset'"), 'The auth form must support the forgot-password reset mode.');
+assert.ok(script.includes('newPassword'), 'The reset flow must submit the new password through the API client.');
 assert.ok(script.includes('data-delete-essay'), 'Each composition list item must expose a delete action.');
 assert.ok(script.includes('范文及本篇摘录都会一起删除'), 'Deleting a composition must clearly warn that its notes are removed too.');
 assert.match(styles, /\.essay-delete-button/, 'The composition delete action needs its own visual treatment.');

@@ -3,9 +3,12 @@ package site.fanwenjia.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -22,12 +25,21 @@ class AuthServiceTest {
     @Autowired
     private UserAccountRepository userAccountRepository;
 
+    @Autowired
+    private VerificationCodeStore verificationCodeStore;
+
+    @MockitoBean
+    private SmtpVerificationEmailSender emailSender;
+
     @Test
-    void registerHashesPasswordAndReturnsOpaqueToken() {
+    void registerRequiresAValidEmailCode() {
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, "reader@example.com", Duration.ofMinutes(5));
+
         AuthResult result = authService.register(new RegisterRequest(
                 "reader@example.com",
                 "StrongPass123",
-                "Reader"
+                "Reader",
+                code
         ));
 
         UserAccount user = userAccountRepository.findByEmail("reader@example.com").orElseThrow();
@@ -38,11 +50,73 @@ class AuthServiceTest {
     }
 
     @Test
+    void registerRejectsWrongCode() {
+        String realCode = verificationCodeStore.issue(VerificationPurpose.REGISTER, "reader@example.com", Duration.ofMinutes(5));
+
+        assertThatThrownBy(() -> authService.register(new RegisterRequest(
+                "reader@example.com",
+                "StrongPass123",
+                "Reader",
+                wrongCodeFor(realCode)
+        )))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(userAccountRepository.findByEmail("reader@example.com")).isEmpty();
+    }
+
+    @Test
     void loginRejectsWrongPassword() {
-        authService.register(new RegisterRequest("reader@example.com", "StrongPass123", "Reader"));
+        seedRegisteredUser("reader@example.com");
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("reader@example.com", "wrong-password")))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("邮箱或密码不正确");
+    }
+
+    @Test
+    void resetPasswordVerifiesCodeAndInvalidatesExistingSessions() {
+        AuthResult oldSession = seedRegisteredUser("reader@example.com");
+        String code = verificationCodeStore.issue(VerificationPurpose.PASSWORD_RESET, "reader@example.com", Duration.ofMinutes(5));
+
+        authService.resetPassword(new ResetPasswordRequest("reader@example.com", code, "FreshPass456"));
+
+        UserAccount user = userAccountRepository.findByEmail("reader@example.com").orElseThrow();
+        assertThat(user.getPasswordHash()).doesNotContain("StrongPass123");
+        assertThat(authService.currentUser(oldSession.token())).isEmpty();
+        assertThat(authService.login(new LoginRequest("reader@example.com", "FreshPass456")).token()).isNotBlank();
+    }
+
+    @Test
+    void registerCodeRefusesTakenEmailsAndThrottlesResends() {
+        seedRegisteredUser("taken@example.com");
+
+        assertThatThrownBy(() -> authService.sendRegisterCode(new SendCodeRequest("taken@example.com")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        authService.sendRegisterCode(new SendCodeRequest("fresh@example.com"));
+        assertThatThrownBy(() -> authService.sendRegisterCode(new SendCodeRequest("fresh@example.com")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    void passwordResetCodeRefusesUnknownEmails() {
+        assertThatThrownBy(() -> authService.sendPasswordResetCode(new SendCodeRequest("ghost@example.com")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    private AuthResult seedRegisteredUser(String email) {
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
+        return authService.register(new RegisterRequest(email, "StrongPass123", "Reader", code));
+    }
+
+    private static String wrongCodeFor(String realCode) {
+        return realCode.equals("000000") ? "999999" : "000000";
     }
 }

@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,11 +21,14 @@ import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import site.fanwenjia.auth.VerificationCodeStore;
+import site.fanwenjia.auth.VerificationPurpose;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:composition-api-test;MODE=MySQL;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "composition.translation.zhipu.api-key="
+        "composition.translation.provider.api-key=",
+        "composition.translation.provider.model="
 })
 @AutoConfigureMockMvc
 @Transactional
@@ -35,6 +39,9 @@ class CompositionApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private VerificationCodeStore verificationCodeStore;
 
     @Test
     void servesTheStandaloneFrontendAndUses401ForProtectedRoutes() throws Exception {
@@ -224,12 +231,14 @@ class CompositionApiTest {
     }
 
     private String register(String email, String displayName) throws Exception {
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
         MvcResult result = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "email", email,
                                 "password", "StrongPass123",
-                                "displayName", displayName
+                                "displayName", displayName,
+                                "code", code
                         ))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").isNotEmpty())

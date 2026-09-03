@@ -22,14 +22,22 @@
     appShell: document.querySelector('#app-shell'),
     authForm: document.querySelector('#auth-form'),
     authModeButtons: document.querySelectorAll('[data-auth-mode]'),
+    authModeToggle: document.querySelector('#auth-mode-toggle'),
     authFormKicker: document.querySelector('#auth-form-kicker'),
     authFormTitle: document.querySelector('#auth-form-title'),
     authFormCopy: document.querySelector('#auth-form-copy'),
     authDisplayNameField: document.querySelector('#auth-display-name-field'),
     authDisplayName: document.querySelector('#auth-display-name'),
     authEmail: document.querySelector('#auth-email'),
+    authCodeField: document.querySelector('#auth-code-field'),
+    authCode: document.querySelector('#auth-code'),
+    sendCodeButton: document.querySelector('#send-code-button'),
+    authCodeHint: document.querySelector('#auth-code-hint'),
     authPassword: document.querySelector('#auth-password'),
+    authPasswordLabel: document.querySelector('#auth-password-label'),
+    forgotPasswordLink: document.querySelector('#forgot-password-link'),
     rememberMe: document.querySelector('#remember-me'),
+    rememberMeField: document.querySelector('#remember-me-field'),
     authSubmitButton: document.querySelector('#auth-submit-button'),
     authFormError: document.querySelector('#auth-form-error'),
     accountDisplayName: document.querySelector('#account-display-name'),
@@ -102,6 +110,8 @@
   let preloadStopRequested = false;
   let preloadDoneCount = 0;
   let preloadTotalCount = 0;
+  let sendCodeTimer = null;
+  let sendCodeSecondsLeft = 0;
   const PRELOAD_BATCH_SIZE_BASE = 10;
   const PRELOAD_REQUEST_TIMEOUT_MS = 9000;
   const PRELOAD_PROGRESS_STEP = 8;
@@ -323,23 +333,106 @@
   }
 
   function setAuthMode(mode, resetForm = true) {
-    state.authMode = mode === 'register' ? 'register' : 'login';
+    state.authMode = mode === 'register' || mode === 'reset' ? mode : 'login';
     const isRegister = state.authMode === 'register';
+    const isReset = state.authMode === 'reset';
+    const needsCode = isRegister || isReset;
+    stopCodeCountdown();
+    dom.authModeToggle.hidden = isReset;
     dom.authModeButtons.forEach((button) => {
       button.setAttribute('aria-selected', String(button.dataset.authMode === state.authMode));
     });
     dom.authDisplayNameField.hidden = !isRegister;
     dom.authDisplayName.required = isRegister;
-    dom.authPassword.autocomplete = isRegister ? 'new-password' : 'current-password';
-    dom.authFormKicker.textContent = isRegister ? 'NEW ARCHIVE' : 'WELCOME BACK';
-    dom.authFormTitle.textContent = isRegister ? '建一个只属于你的范文夹' : '进入你的范文夹';
-    dom.authFormCopy.textContent = isRegister
-      ? '注册后，你保存的范文和摘录只会进入这个独立账户。'
-      : '登录后继续阅读、摘录和整理自己的范文。';
-    dom.authSubmitButton.textContent = isRegister ? '注册并进入' : '登录并进入';
+    dom.authCodeField.hidden = !needsCode;
+    dom.authCode.required = needsCode;
+    dom.forgotPasswordLink.hidden = state.authMode !== 'login';
+    dom.rememberMeField.hidden = isReset;
+    dom.authPassword.autocomplete = state.authMode === 'login' ? 'current-password' : 'new-password';
+    dom.authPasswordLabel.innerHTML = isReset ? '新密码 <em>至少 8 位</em>' : '密码 <em>至少 8 位</em>';
+    dom.authFormKicker.textContent = isReset ? 'PASSWORD HELP' : (isRegister ? 'NEW ARCHIVE' : 'WELCOME BACK');
+    dom.authFormTitle.textContent = isReset
+      ? '重置你的密码'
+      : (isRegister ? '建一个只属于你的范文夹' : '进入你的范文夹');
+    dom.authFormCopy.textContent = isReset
+      ? '输入注册邮箱收到的验证码，设置新密码；重置后所有已登录设备需重新登录。'
+      : (isRegister
+        ? '注册后，你保存的范文和摘录只会进入这个独立账户。'
+        : '登录后继续阅读、摘录和整理自己的范文。');
+    dom.authSubmitButton.textContent = isReset ? '重置密码' : (isRegister ? '注册并进入' : '登录并进入');
     delete dom.authSubmitButton.dataset.idleText;
     dom.authFormError.textContent = '';
+    dom.authCodeHint.textContent = '';
     if (resetForm) dom.authForm.reset();
+  }
+
+  function stopCodeCountdown() {
+    if (sendCodeTimer !== null) {
+      window.clearInterval(sendCodeTimer);
+      sendCodeTimer = null;
+    }
+    sendCodeSecondsLeft = 0;
+    if (dom.sendCodeButton) {
+      dom.sendCodeButton.disabled = false;
+      dom.sendCodeButton.textContent = '获取验证码';
+    }
+  }
+
+  function updateSendCodeButton() {
+    if (!dom.sendCodeButton) return;
+    if (sendCodeSecondsLeft > 0) {
+      dom.sendCodeButton.disabled = true;
+      dom.sendCodeButton.textContent = `重新发送 ${sendCodeSecondsLeft}s`;
+    } else {
+      dom.sendCodeButton.disabled = false;
+      dom.sendCodeButton.textContent = '获取验证码';
+    }
+  }
+
+  function startCodeCountdown() {
+    sendCodeSecondsLeft = 60;
+    updateSendCodeButton();
+    sendCodeTimer = window.setInterval(() => {
+      sendCodeSecondsLeft -= 1;
+      updateSendCodeButton();
+      if (sendCodeSecondsLeft <= 0) stopCodeCountdown();
+    }, 1000);
+  }
+
+  async function requestVerificationCode() {
+    if (sendCodeSecondsLeft > 0) return;
+    const email = dom.authEmail.value.trim();
+    if (!email) {
+      dom.authFormError.textContent = '请先填写邮箱，再获取验证码。';
+      dom.authEmail.focus();
+      return;
+    }
+    const purpose = state.authMode === 'register' ? 'register' : 'reset';
+    dom.sendCodeButton.disabled = true;
+    dom.sendCodeButton.textContent = '发送中…';
+    dom.authFormError.textContent = '';
+    try {
+      if (purpose === 'register') await api.sendRegisterCode({ email });
+      else await api.sendResetCode({ email });
+      startCodeCountdown();
+      dom.authCodeHint.textContent = '验证码已发送到你的邮箱，5 分钟内有效；一分钟内只能获取一次。';
+    } catch (error) {
+      dom.authFormError.textContent = authErrorText(error, '验证码发送失败，请稍后重试。');
+      updateSendCodeButton();
+    }
+  }
+
+  function authErrorText(error, fallback) {
+    if (error instanceof ApiError) {
+      if (error.status === 400) return '验证码不正确或已过期，请重新获取。';
+      if (error.status === 401) return '邮箱或密码不正确。';
+      if (error.status === 404) return '该邮箱尚未注册。';
+      if (error.status === 409) return '该邮箱已经注册，请直接登录或重置密码。';
+      if (error.status === 429) return '验证码已发送，请一分钟后再试。';
+      if (error.status === 503) return '邮件服务暂时不可用，请稍后重试。';
+      return error.message || fallback;
+    }
+    return fallback;
   }
 
   function showAuthGate(message = '') {
@@ -445,26 +538,46 @@
     const email = dom.authEmail.value.trim();
     const password = dom.authPassword.value;
     const displayName = dom.authDisplayName.value.trim();
-    if (!email || !password || (state.authMode === 'register' && !displayName)) {
-      dom.authFormError.textContent = state.authMode === 'register' && !displayName
-        ? '请填写称呼。'
-        : '请填写邮箱和密码。';
+    const code = dom.authCode.value.trim();
+    const mode = state.authMode;
+    if (mode === 'register' && !displayName) {
+      dom.authFormError.textContent = '请填写称呼。';
+      return;
+    }
+    if (!email) {
+      dom.authFormError.textContent = '请填写邮箱。';
+      return;
+    }
+    if (mode !== 'login' && !/^\d{6}$/.test(code)) {
+      dom.authFormError.textContent = '请填写邮箱收到的 6 位数字验证码。';
+      return;
+    }
+    if (!password || password.length < 8) {
+      dom.authFormError.textContent = mode === 'login' ? '请填写密码。' : '密码至少需要 8 位。';
       return;
     }
 
     setButtonBusy(dom.authSubmitButton, true);
     dom.authFormError.textContent = '';
-    const remember = dom.rememberMe.checked;
     try {
-      const result = state.authMode === 'register'
-        ? await api.register({ email, password, displayName }, { remember })
+      if (mode === 'reset') {
+        await api.resetPassword({ email, code, newPassword: password });
+        setAuthMode('login', false);
+        dom.authPassword.value = '';
+        window.setTimeout(() => dom.authPassword.focus(), 0);
+        showToast('密码已重置，请用新密码登录。');
+        return;
+      }
+      const remember = dom.rememberMe.checked;
+      const result = mode === 'register'
+        ? await api.register({ email, password, displayName, code }, { remember })
         : await api.login({ email, password }, { remember });
       state.currentUser = result.user;
       showApp();
       await loadEssays();
       showToast(`欢迎回来，${result.user.displayName}。`);
     } catch (error) {
-      dom.authFormError.textContent = errorMessage(error, '暂时无法进入范文夹。');
+      dom.authFormError.textContent = authErrorText(error, '暂时无法进入范文夹。');
     } finally {
       setButtonBusy(dom.authSubmitButton, false);
     }
@@ -1030,6 +1143,13 @@
     dom.authModeButtons.forEach((button) => {
       button.addEventListener('click', () => setAuthMode(button.dataset.authMode));
     });
+    dom.forgotPasswordLink.addEventListener('click', () => {
+      const email = dom.authEmail.value.trim();
+      setAuthMode('reset');
+      if (email) dom.authEmail.value = email;
+      window.setTimeout(() => (dom.authEmail.value ? dom.authCode : dom.authEmail).focus(), 0);
+    });
+    dom.sendCodeButton.addEventListener('click', () => void requestVerificationCode());
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));
     dom.logoutButton.addEventListener('click', () => void logout());
     dom.newEssayButton.addEventListener('click', openEssayDialog);

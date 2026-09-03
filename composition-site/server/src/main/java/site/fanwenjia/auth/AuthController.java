@@ -27,6 +27,24 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
+    @PostMapping("/register/send-code")
+    public ResponseEntity<Void> sendRegisterCode(@Valid @RequestBody SendCodeRequest request) {
+        authService.sendRegisterCode(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password/send-code")
+    public ResponseEntity<Void> sendPasswordResetCode(@Valid @RequestBody SendCodeRequest request) {
+        authService.sendPasswordResetCode(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/login")
     public AuthResult login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);

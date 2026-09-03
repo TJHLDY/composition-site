@@ -18,7 +18,7 @@
             <h2 id="auth-form-title">进入你的范文夹</h2>
             <p id="auth-form-copy">登录后继续阅读、摘录和整理自己的范文。</p>
           </div>
-          <div class="auth-mode-toggle" role="tablist" aria-label="账户操作">
+          <div class="auth-mode-toggle" id="auth-mode-toggle" role="tablist" aria-label="账户操作">
             <button type="button" role="tab" data-auth-mode="login" aria-selected="true">登录</button>
             <button type="button" role="tab" data-auth-mode="register" aria-selected="false">注册</button>
           </div>
@@ -28,9 +28,18 @@
           </div>
           <label class="field-label" for="auth-email">邮箱 <em>必填</em></label>
           <input id="auth-email" name="email" type="email" maxlength="320" autocomplete="email" placeholder="name@example.com" required />
-          <label class="field-label" for="auth-password">密码 <em>至少 8 位</em></label>
+          <div id="auth-code-field" hidden>
+            <label class="field-label" for="auth-code">邮箱验证码 <em>必填</em></label>
+            <div class="auth-code-row">
+              <input id="auth-code" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位数字" />
+              <button class="secondary-button" id="send-code-button" type="button">获取验证码</button>
+            </div>
+            <p class="code-hint" id="auth-code-hint"></p>
+          </div>
+          <label class="field-label" for="auth-password" id="auth-password-label">密码 <em>至少 8 位</em></label>
           <input id="auth-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="current-password" required />
-          <label class="remember-me">
+          <button type="button" class="forgot-link" id="forgot-password-link" hidden>忘记密码？</button>
+          <label class="remember-me" id="remember-me-field">
             <input id="remember-me" name="rememberMe" type="checkbox" />
             <span>七天内自动登录</span>
           </label>
@@ -67,7 +76,6 @@
             </div>
             <span id="essay-count" class="counter-chip">0</span>
           </div>
-          <p class="library-copy">每一篇范文，都是一份可以慢慢做批注的阅读材料。</p>
           <div class="essay-list" id="essay-list" role="list"></div>
           <div class="library-footnote">
             <span class="footnote-dot" aria-hidden="true"></span>

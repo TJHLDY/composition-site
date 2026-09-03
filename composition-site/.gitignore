@@ -9,3 +9,4 @@ server/*.log
 .env
 .env.*
 !*.env.example
+server/mail-local.txt

@@ -46,7 +46,12 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/register",
+                                "/api/auth/register/send-code",
+                                "/api/auth/login",
+                                "/api/auth/forgot-password/send-code",
+                                "/api/auth/forgot-password/reset").permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/styles.css", "/api-client.js", "/app.js", "/essay-utils.js").permitAll()
                         .anyRequest().authenticated()
                 )

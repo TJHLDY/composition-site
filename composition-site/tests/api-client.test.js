@@ -45,11 +45,17 @@ const api = createApiClient({
 });
 
 (async () => {
-  const result = await api.register({ email: 'reader@example.com', password: 'StrongPass123', displayName: 'Reader' });
+  const result = await api.register({
+    email: 'reader@example.com',
+    password: 'StrongPass123',
+    displayName: 'Reader',
+    code: '246810'
+  });
   assert.equal(result.user.email, 'reader@example.com');
   assert.equal(storage.getItem(SESSION_TOKEN_KEY), 'opaque-token');
   assert.equal(calls[0].url, '/api/auth/register');
   assert.equal(calls[0].options.headers.Authorization, undefined);
+  assert.equal(JSON.parse(calls[0].options.body).code, '246810', '注册必须携带邮箱验证码。');
 
   await api.createComposition({ title: 'A title', sourceLabel: null, content: 'An essay.' });
   assert.equal(calls[1].url, '/api/compositions');
@@ -166,6 +172,31 @@ const api = createApiClient({
   await forgetfulApi.login({ email: 'old@example.com', password: 'StrongPass123' });
   assert.equal(forgetfulPersistent.getItem(REMEMBERED_TOKEN_KEY), null, '未勾选记住我时不得保留旧令牌。');
   assert.equal(forgetfulPersistent.getItem(REMEMBERED_EMAIL_KEY), null, '未勾选记住我时也不得保留旧邮箱。');
+
+  // 验证码三个接口都不依赖登录态,重置成功只返回 204。
+  const codeCalls = [];
+  const codeReplies = [response(204), response(204), response(204)];
+  const codeApi = createApiClient({
+    storage: memoryStorage(),
+    fetchImpl: async (url, options) => {
+      codeCalls.push({ url, options });
+      return codeReplies.shift();
+    }
+  });
+  await codeApi.sendRegisterCode({ email: 'new@example.com' });
+  await codeApi.sendResetCode({ email: 'reader@example.com' });
+  await codeApi.resetPassword({ email: 'reader@example.com', code: '123456', newPassword: 'FreshPass456' });
+  assert.equal(codeCalls[0].url, '/api/auth/register/send-code');
+  assert.equal(codeCalls[1].url, '/api/auth/forgot-password/send-code');
+  assert.equal(codeCalls[2].url, '/api/auth/forgot-password/reset');
+  codeCalls.forEach((call) => {
+    assert.equal(call.options.headers.Authorization, undefined, '验证码接口不得携带登录令牌。');
+  });
+  assert.deepEqual(JSON.parse(codeCalls[2].options.body), {
+    email: 'reader@example.com',
+    code: '123456',
+    newPassword: 'FreshPass456'
+  }, '重置密码只提交邮箱、验证码和新密码。');
 
   console.log('Authenticated composition API client passed.');
 })();

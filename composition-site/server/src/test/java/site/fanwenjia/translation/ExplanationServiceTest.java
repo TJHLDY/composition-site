@@ -12,10 +12,13 @@ import site.fanwenjia.auth.AuthResult;
 import site.fanwenjia.auth.AuthService;
 import site.fanwenjia.auth.CurrentUser;
 import site.fanwenjia.auth.RegisterRequest;
+import site.fanwenjia.auth.VerificationCodeStore;
+import site.fanwenjia.auth.VerificationPurpose;
 import site.fanwenjia.composition.CompositionService;
 import site.fanwenjia.composition.CompositionView;
 import site.fanwenjia.composition.CreateCompositionRequest;
 import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentMap;
@@ -41,6 +44,9 @@ class ExplanationServiceTest {
 
     @Autowired
     private ExplanationService explanationService;
+
+    @Autowired
+    private VerificationCodeStore verificationCodeStore;
 
     @MockBean
     private ContextualExplainer contextualExplainer;
@@ -156,7 +162,8 @@ class ExplanationServiceTest {
     }
 
     private CurrentUser register(String email, String displayName) {
-        AuthResult result = authService.register(new RegisterRequest(email, "StrongPass123", displayName));
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
+        AuthResult result = authService.register(new RegisterRequest(email, "StrongPass123", displayName, code));
         return new CurrentUser(result.user().id(), result.user().email(), result.user().displayName());
     }
 

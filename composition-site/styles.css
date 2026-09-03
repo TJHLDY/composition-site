@@ -110,6 +110,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .essay-word:f
   accent-color: var(--moss);
   cursor: pointer;
 }
+.auth-code-row { display: flex; gap: 9px; }
+.auth-code-row input { flex: 1; min-width: 0; letter-spacing: .18em; }
+.auth-code-row .secondary-button { flex: none; white-space: nowrap; }
+.code-hint { margin: 8px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.6; }
+.forgot-link {
+  display: block;
+  margin: 9px 0 0;
+  padding: 0;
+  color: var(--moss-bright);
+  font-size: .76rem;
+  background: none;
+  border: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.forgot-link:hover { color: var(--moss); }
 .auth-submit { width: 100%; margin-top: 10px; }
 .auth-footnote { margin: 17px 0 0; color: #95968b; font-size: .68rem; line-height: 1.65; text-align: center; }
 
@@ -248,8 +265,6 @@ h1 { margin: 0; font-size: 1.64rem; font-weight: 700; letter-spacing: .03em; }
   border: 1px solid rgba(33,77,61,.18);
   border-radius: 999px;
 }
-
-.library-copy { margin: 17px 8px 21px; color: var(--muted); font-size: .8rem; line-height: 1.75; }
 
 .essay-list { display: grid; gap: 7px; }
 .essay-list-item { position: relative; }

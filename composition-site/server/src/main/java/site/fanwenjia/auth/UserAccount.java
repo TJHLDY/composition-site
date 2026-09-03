@@ -61,4 +61,8 @@ public class UserAccount {
     public String getPasswordHash() {
         return passwordHash;
     }
+
+    void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

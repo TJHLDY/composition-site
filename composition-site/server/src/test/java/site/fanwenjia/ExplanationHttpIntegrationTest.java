@@ -2,6 +2,8 @@ package site.fanwenjia;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import site.fanwenjia.auth.VerificationCodeStore;
+import site.fanwenjia.auth.VerificationPurpose;
 
 /**
  * Exercises the servlet error-dispatch path that MockMvc does not use.
@@ -22,12 +26,16 @@ import org.springframework.http.ResponseEntity;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.datasource.url=jdbc:h2:mem:composition-real-http-test;MODE=MySQL;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "composition.translation.zhipu.api-key="
+        "composition.translation.provider.api-key=",
+        "composition.translation.provider.model="
 })
 class ExplanationHttpIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    @Autowired
+    private VerificationCodeStore verificationCodeStore;
 
     @LocalServerPort
     private int port;
@@ -35,13 +43,16 @@ class ExplanationHttpIntegrationTest {
     @Test
     void missingTranslationConfigurationReturns503OverTheRealHttpServer() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String email = "real-http-" + suffix + "@example.com";
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
+        Map<String, String> registerBody = new HashMap<>();
+        registerBody.put("email", email);
+        registerBody.put("password", "StrongPass123");
+        registerBody.put("displayName", "HTTP Reader");
+        registerBody.put("code", code);
         ResponseEntity<Map> registered = restTemplate.postForEntity(
                 url("/api/auth/register"),
-                Map.of(
-                        "email", "real-http-" + suffix + "@example.com",
-                        "password", "StrongPass123",
-                        "displayName", "HTTP Reader"
-                ),
+                registerBody,
                 Map.class
         );
         assertThat(registered.getStatusCode()).isEqualTo(HttpStatus.CREATED);

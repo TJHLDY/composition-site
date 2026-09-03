@@ -8,6 +8,9 @@ import site.fanwenjia.auth.AuthResult;
 import site.fanwenjia.auth.AuthService;
 import site.fanwenjia.auth.CurrentUser;
 import site.fanwenjia.auth.RegisterRequest;
+import site.fanwenjia.auth.VerificationCodeStore;
+import site.fanwenjia.auth.VerificationPurpose;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,6 +29,9 @@ class CompositionServiceTest {
 
     @Autowired
     private CompositionService compositionService;
+
+    @Autowired
+    private VerificationCodeStore verificationCodeStore;
 
     @Test
     void listReturnsOnlyTheCurrentUsersEssaysNewestFirst() {
@@ -202,7 +208,8 @@ class CompositionServiceTest {
     }
 
     private CurrentUser register(String email, String displayName) {
-        AuthResult result = authService.register(new RegisterRequest(email, "StrongPass123", displayName));
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
+        AuthResult result = authService.register(new RegisterRequest(email, "StrongPass123", displayName, code));
         return new CurrentUser(result.user().id(), result.user().email(), result.user().displayName());
     }
 }

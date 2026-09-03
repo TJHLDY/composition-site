@@ -16,11 +16,18 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+/**
+ * OpenAI 兼容的语境翻译客户端。适用于任何暴露 {@code POST {base-url}/chat/completions} 的
+ * 提供商（如 taotoken 中转站等）。鉴权方式为 {@code Authorization: Bearer <key>}。
+ *
+ * <p>配置通过环境变量注入（{@code TRANSLATION_API_KEY} / {@code TRANSLATION_BASE_URL} /
+ * {@code TRANSLATION_MODEL}），未配置密钥或模型时优雅降级为“翻译暂不可用”，站点照常启动。
+ */
 @Component
-class ZhipuContextualExplainer implements ContextualExplainer {
+class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
 
-    private static final String DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
-    private static final String DEFAULT_MODEL = "glm-5.2";
+    private static final String DEFAULT_BASE_URL = "https://taotoken.net/api/v1";
+    private static final String DEFAULT_MODEL = "";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(18);
 
     private final ObjectMapper objectMapper;
@@ -28,23 +35,29 @@ class ZhipuContextualExplainer implements ContextualExplainer {
     private final String apiKey;
     private final String baseUrl;
     private final String model;
+    private final double temperature;
+    private final boolean structuredOutput;
 
-    ZhipuContextualExplainer(
+    OpenAiCompatibleContextualExplainer(
             ObjectMapper objectMapper,
-            @Value("${composition.translation.zhipu.api-key:}") String apiKey,
-            @Value("${composition.translation.zhipu.base-url:" + DEFAULT_BASE_URL + "}") String baseUrl,
-            @Value("${composition.translation.zhipu.model:" + DEFAULT_MODEL + "}") String model
+            @Value("${composition.translation.provider.api-key:}") String apiKey,
+            @Value("${composition.translation.provider.base-url:" + DEFAULT_BASE_URL + "}") String baseUrl,
+            @Value("${composition.translation.provider.model:" + DEFAULT_MODEL + "}") String model,
+            @Value("${composition.translation.provider.temperature:0.0}") double temperature,
+            @Value("${composition.translation.provider.structured-output:true}") boolean structuredOutput
     ) {
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.baseUrl = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl.trim();
-        this.model = model == null || model.isBlank() ? DEFAULT_MODEL : model.trim();
+        this.model = model == null ? "" : model.trim();
+        this.temperature = temperature;
+        this.structuredOutput = structuredOutput;
     }
 
     @Override
     public boolean isConfigured() {
-        return !apiKey.isBlank();
+        return !apiKey.isBlank() && !model.isBlank();
     }
 
     @Override
@@ -60,7 +73,7 @@ class ZhipuContextualExplainer implements ContextualExplainer {
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(
-                            objectMapper.writeValueAsString(requestBody(selection, currentUser, generateLearningText))
+                            objectMapper.writeValueAsString(requestBody(selection, generateLearningText))
                     ))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -81,22 +94,18 @@ class ZhipuContextualExplainer implements ContextualExplainer {
         return URI.create(normalized + "/chat/completions");
     }
 
-    private Map<String, Object> requestBody(
-            SelectionContext selection,
-            CurrentUser currentUser,
-            boolean generateLearningText
-    ) {
+    private Map<String, Object> requestBody(SelectionContext selection, boolean generateLearningText) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt(generateLearningText)),
                 Map.of("role", "user", "content", userPrompt(selection))
         ));
-        body.put("response_format", Map.of("type", "json_object"));
-        body.put("thinking", Map.of("type", "disabled"));
-        body.put("do_sample", false);
+        if (structuredOutput) {
+            body.put("response_format", Map.of("type", "json_object"));
+        }
+        body.put("temperature", temperature);
         body.put("max_tokens", 256);
-        body.put("user_id", "reader-" + currentUser.id());
         return body;
     }
 

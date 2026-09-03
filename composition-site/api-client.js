@@ -180,6 +180,21 @@
       getRememberedEmail,
       register: (payload, sessionOptions) => establishSession('/api/auth/register', payload, sessionOptions),
       login: (payload, sessionOptions) => establishSession('/api/auth/login', payload, sessionOptions),
+      sendRegisterCode: (payload) => request('/api/auth/register/send-code', {
+        method: 'POST',
+        body: payload,
+        requiresAuth: false
+      }),
+      sendResetCode: (payload) => request('/api/auth/forgot-password/send-code', {
+        method: 'POST',
+        body: payload,
+        requiresAuth: false
+      }),
+      resetPassword: (payload) => request('/api/auth/forgot-password/reset', {
+        method: 'POST',
+        body: payload,
+        requiresAuth: false
+      }),
       currentUser: () => request('/api/auth/me'),
       async logout() {
         try {
