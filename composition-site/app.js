@@ -4,7 +4,7 @@
   const previewUtils = window.CompositionPreviewUtils;
   const apiModule = window.CompositionApiClient;
   if (!previewUtils || !apiModule) {
-    console.error('范文夹没有加载完整，请刷新页面后重试。');
+    console.error('写译笔记本没有加载完整，请刷新页面后重试。');
     return;
   }
 
@@ -353,7 +353,7 @@
     dom.authFormKicker.textContent = isReset ? 'PASSWORD HELP' : (isRegister ? 'NEW ARCHIVE' : 'WELCOME BACK');
     dom.authFormTitle.textContent = isReset
       ? '重置你的密码'
-      : (isRegister ? '建一个只属于你的范文夹' : '进入你的范文夹');
+      : (isRegister ? '建一个只属于你的写译笔记本' : '进入你的写译笔记本');
     dom.authFormCopy.textContent = isReset
       ? '输入注册邮箱收到的验证码，设置新密码；重置后所有已登录设备需重新登录。'
       : (isRegister
@@ -577,7 +577,7 @@
       await loadEssays();
       showToast(`欢迎回来，${result.user.displayName}。`);
     } catch (error) {
-      dom.authFormError.textContent = authErrorText(error, '暂时无法进入范文夹。');
+      dom.authFormError.textContent = authErrorText(error, '暂时无法进入写译笔记本。');
     } finally {
       setButtonBusy(dom.authSubmitButton, false);
     }
@@ -592,7 +592,7 @@
     } finally {
       dom.logoutButton.disabled = false;
       showAuthGate();
-      showToast('你已退出范文夹。');
+      showToast('你已退出写译笔记本。');
     }
   }
 
@@ -633,7 +633,7 @@
       renderAll();
       if (isMobileLayout()) dom.workspace.classList.add('show-reader');
       void refreshEssayList();
-      showToast('范文已收入你的范文夹。');
+      showToast('范文已收入你的写译笔记本。');
     } catch (error) {
       if (!handleExpiredSession(error)) dom.essayFormError.textContent = errorMessage(error, '范文暂时没有保存成功。');
     } finally {

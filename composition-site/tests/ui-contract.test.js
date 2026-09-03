@@ -139,7 +139,7 @@ assert.match(
 assert.match(
   styles,
   /\.essay-body::selection\s*\{[^}]*background[^}]*color/s,
-  'The essay reader must use a 范文夹 selection treatment instead of the default blue highlight.'
+  'The essay reader must use a 写译笔记本 selection treatment instead of the default blue highlight.'
 );
 assert.match(
   styles,

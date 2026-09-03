@@ -53,7 +53,7 @@ class CompositionApiTest {
                 .andExpect(result -> assertThat(new String(
                         result.getResponse().getContentAsByteArray(),
                         StandardCharsets.UTF_8
-                )).contains("范文夹"));
+                )).contains("写译笔记本"));
         mockMvc.perform(get("/styles.css")).andExpect(status().isOk());
         mockMvc.perform(get("/api-client.js")).andExpect(status().isOk());
         mockMvc.perform(get("/app.js")).andExpect(status().isOk());
