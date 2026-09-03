@@ -7,11 +7,11 @@ services:
     healthCheckPath: /
     envVars:
       - key: COMPOSITION_MAIL_HOST
-        value: smtp.163.com
+        value: smtp.gmail.com
       - key: COMPOSITION_MAIL_PORT
         value: "465"
       - key: COMPOSITION_MAIL_USERNAME
-        value: VocabNote@163.com
+        value: tjhldy6666@gmail.com
       - key: COMPOSITION_MAIL_PASSWORD
         sync: false
       - key: TRANSLATION_BASE_URL
