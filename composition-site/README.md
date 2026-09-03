@@ -27,6 +27,18 @@ mvn -f .\composition-site\server\pom.xml spring-boot:run
    - `COMPOSITION_MAIL_USERNAME` / `COMPOSITION_MAIL_PASSWORD`（可选，验证码邮件用）
 5. 部署完成后会拿到一个公开 URL，直接把链接发给别人即可。
 
+### Railway 一键部署（可选）
+
+本目录也可直接被 Railway 识别：
+
+1. 在 Railway 创建 Web Service，连接本仓库。
+2. 选择 `main` 分支并保持默认部署命令（会自动读取 `composition-site/railway.toml`）。
+3. 在环境变量里配置：
+   - `TRANSLATION_API_KEY`
+   - `TRANSLATION_MODEL`
+   - `COMPOSITION_MAIL_USERNAME` / `COMPOSITION_MAIL_PASSWORD`（可选）
+4. 点击 Deploy，拿到公开访问 URL 即可发给别人。
+
 说明：
 - 本站点前端和后端是同一个 Spring Boot 服务，Render 直接暴露一个公开接口，不需要额外配置。
 - 默认数据库是 H2，如果要迁移到 MySQL 可配置 `mysql` profile（见下方 MySQL 部分）。
