@@ -49,6 +49,7 @@ mvn -f .\composition-site\server\pom.xml spring-boot:run
 | `TRANSLATION_MODEL` | 模型 ID（在中转站模型广场选择） | 无；必须配置 |
 | `TRANSLATION_TEMPERATURE` | 采样温度（0 为确定性输出） | `0` |
 | `TRANSLATION_STRUCTURED_OUTPUT` | 是否发送 `response_format: json_object` | `true` |
+| `TRANSLATION_DISABLE_THINKING` | 是否发送 `thinking: {type: disabled}` 关闭思考模式（DeepSeek V4 / GLM 默认开思考，推理 token 会计入 `max_tokens` 导致简单释义被截断为空，故默认关闭） | `true` |
 
 请在本机安全环境或部署平台的 Secret 设置中配置 `TRANSLATION_API_KEY` 与 `TRANSLATION_MODEL`，再重启服务。若某个模型不支持 `response_format`，可把 `TRANSLATION_STRUCTURED_OUTPUT` 设为 `false`。
 

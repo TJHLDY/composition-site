@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -26,8 +28,11 @@ import org.springframework.stereotype.Component;
 @Component
 class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
 
+    private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleContextualExplainer.class);
     private static final String DEFAULT_BASE_URL = "https://taotoken.net/api/v1";
     private static final String DEFAULT_MODEL = "";
+    private static final int MAX_TOKENS = 512;
+    private static final int ERROR_BODY_LOG_LIMIT = 300;
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(18);
 
     private final ObjectMapper objectMapper;
@@ -37,6 +42,7 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
     private final String model;
     private final double temperature;
     private final boolean structuredOutput;
+    private final boolean disableThinking;
 
     OpenAiCompatibleContextualExplainer(
             ObjectMapper objectMapper,
@@ -44,7 +50,8 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
             @Value("${composition.translation.provider.base-url:" + DEFAULT_BASE_URL + "}") String baseUrl,
             @Value("${composition.translation.provider.model:" + DEFAULT_MODEL + "}") String model,
             @Value("${composition.translation.provider.temperature:0.0}") double temperature,
-            @Value("${composition.translation.provider.structured-output:true}") boolean structuredOutput
+            @Value("${composition.translation.provider.structured-output:true}") boolean structuredOutput,
+            @Value("${composition.translation.provider.disable-thinking:true}") boolean disableThinking
     ) {
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
@@ -53,6 +60,7 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
         this.model = model == null ? "" : model.trim();
         this.temperature = temperature;
         this.structuredOutput = structuredOutput;
+        this.disableThinking = disableThinking;
     }
 
     @Override
@@ -78,10 +86,13 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("语境翻译上游返回非 2xx：status={}, body={}",
+                        response.statusCode(), abbreviate(response.body()));
                 throw new TranslationUnavailableException();
             }
             return parseResponse(response.body(), generateLearningText);
         } catch (IOException exception) {
+            log.warn("语境翻译请求失败：{}", exception.toString());
             throw new TranslationUnavailableException(exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -104,8 +115,13 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
         if (structuredOutput) {
             body.put("response_format", Map.of("type", "json_object"));
         }
+        // DeepSeek V4 / GLM 等默认开启思考模式，推理 token 会计入 max_tokens，
+        // 简单释义任务可能在输出正式答案前就被截断（content 为空）。默认显式关闭思考。
+        if (disableThinking) {
+            body.put("thinking", Map.of("type", "disabled"));
+        }
         body.put("temperature", temperature);
-        body.put("max_tokens", 256);
+        body.put("max_tokens", MAX_TOKENS);
         return body;
     }
 
@@ -132,7 +148,11 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
         try {
             JsonNode response = objectMapper.readTree(body);
             String content = response.at("/choices/0/message/content").asText(null);
-            if (content == null || content.isBlank()) throw new TranslationUnavailableException();
+            if (content == null || content.isBlank()) {
+                log.warn("语境翻译上游返回空内容：finish={}, body={}",
+                        response.at("/choices/0/finish_reason").asText("?"), abbreviate(body));
+                throw new TranslationUnavailableException();
+            }
             JsonNode explanation = objectMapper.readTree(stripCodeFence(content));
             String translation = explanation.path("translationZh").asText("").trim();
             String memoryHint = explanation.path("memoryHint").asText("").trim();
@@ -146,6 +166,14 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
         } catch (IOException exception) {
             throw new TranslationUnavailableException(exception);
         }
+    }
+
+    private String abbreviate(String text) {
+        if (text == null) return "";
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= ERROR_BODY_LOG_LIMIT
+                ? normalized
+                : normalized.substring(0, ERROR_BODY_LOG_LIMIT) + "…";
     }
 
     private String stripCodeFence(String content) {

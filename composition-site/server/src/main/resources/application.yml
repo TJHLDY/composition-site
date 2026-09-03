@@ -38,3 +38,4 @@ composition:
       model: ${TRANSLATION_MODEL:}
       temperature: ${TRANSLATION_TEMPERATURE:0}
       structured-output: ${TRANSLATION_STRUCTURED_OUTPUT:true}
+      disable-thinking: ${TRANSLATION_DISABLE_THINKING:true}
