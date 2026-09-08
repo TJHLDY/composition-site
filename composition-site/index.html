@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f2efe5" />
     <meta name="format-detection" content="telephone=no" />
-    <title>写译笔记本 · 你的英语作文档案</title>
+    <link rel="icon" href="data:," />
+    <title>VocabNote · 单词与写译笔记</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="wordbook.css" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -15,7 +17,7 @@
         <form class="auth-form" id="auth-form" novalidate>
           <div class="auth-form-heading">
             <p class="eyebrow" id="auth-form-kicker">WELCOME BACK</p>
-            <h2 id="auth-form-title">进入你的写译笔记本</h2>
+            <h2 id="auth-form-title">进入 VocabNote</h2>
             <p id="auth-form-copy">登录后继续阅读、摘录和整理自己的范文。</p>
           </div>
           <div class="auth-mode-toggle" id="auth-mode-toggle" role="tablist" aria-label="账户操作">
@@ -37,7 +39,12 @@
             <p class="code-hint" id="auth-code-hint"></p>
           </div>
           <label class="field-label" for="auth-password" id="auth-password-label">密码 <em>至少 8 位</em></label>
-          <input id="auth-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="current-password" required />
+          <div class="password-field">
+            <input id="auth-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="current-password" required />
+            <button class="password-toggle" id="auth-password-toggle" type="button" aria-label="显示密码" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12s3.3-5.5 9.5-5.5S21.5 12 21.5 12 18.2 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/><path class="password-eye-slash" d="m4 4 16 16"/></svg>
+            </button>
+          </div>
           <button type="button" class="forgot-link" id="forgot-password-link" hidden>忘记密码？</button>
           <label class="remember-me" id="remember-me-field">
             <input id="remember-me" name="rememberMe" type="checkbox" />
@@ -50,22 +57,55 @@
       </div>
     </section>
 
-    <main class="app-frame" id="app-shell" aria-label="写译笔记本" hidden>
+    <main class="app-frame" id="app-shell" aria-label="VocabNote" hidden>
       <header class="masthead">
         <div class="brand-block">
-          <span class="brand-mark" aria-hidden="true">文</span>
+          <span class="brand-mark" aria-hidden="true">V</span>
           <div>
-            <p class="eyebrow">PERSONAL ESSAY DOSSIER</p>
-            <h1>写译笔记本</h1>
+            <p class="eyebrow">WORDS WORTH KEEPING</p>
+            <h1>VocabNote</h1>
           </div>
         </div>
         <div class="masthead-actions">
+          <button id="ai-settings-button" type="button" class="secondary-button">AI 设置</button>
           <span class="account-chip" id="account-chip"><span id="account-display-name"></span><button id="logout-button" type="button">退出</button></span>
           <button class="icon-button add-button" id="new-essay-button" type="button" aria-label="新建作文">
             <span aria-hidden="true">+</span>
           </button>
         </div>
       </header>
+
+      <nav class="site-nav" aria-label="学习空间">
+        <button type="button" data-site-view="wordbook" aria-current="page" aria-controls="wordbook-view">单词本 <span>Wordbook</span></button>
+        <button type="button" data-site-view="compositions" aria-controls="workspace">写译笔记 <span>Composition notes</span></button>
+      </nav>
+
+      <section id="wordbook-view" class="wb-view" aria-label="我的单词本" hidden>
+        <aside class="wb-library" aria-label="词条列表">
+          <div class="wb-library-heading">
+            <div><p class="eyebrow">MY WORDBOOK</p><h2>一点一滴，积累表达。</h2></div>
+            <button type="button" class="icon-button wb-add" id="wb-add" aria-label="手动添加词条">+</button>
+          </div>
+          <form id="wb-search-form" class="wb-search" role="search">
+            <label for="wb-query">搜索我的词库</label>
+            <div class="wb-search-row"><input id="wb-query" type="search" maxlength="500" autocomplete="off" placeholder="英文 / 中文释义" aria-describedby="wb-search-hint" /><button type="submit" id="wb-lookup" aria-label="查词或短语">查词 ↵</button></div>
+            <p id="wb-search-hint">输入筛选已收藏的词，回车查询新表达。</p>
+          </form>
+          <div class="wb-kinds" role="group" aria-label="词条分类">
+            <button type="button" data-wb-kind="word" aria-pressed="true">单词 <span id="wb-word-count">0</span></button>
+            <button type="button" data-wb-kind="phrase" aria-pressed="false">短语 <span id="wb-phrase-count">0</span></button>
+          </div>
+          <div class="wb-list-meta"><span id="wb-result-count">我的收藏</span><span>按 A–Z 排列</span></div>
+          <p id="wb-search-status" class="wb-status" role="status" aria-live="polite"></p>
+          <div id="wb-list" class="wb-list"></div>
+          <div id="wb-pagination" class="wb-pagination" hidden><button id="wb-prev" type="button">← 上一页</button><span id="wb-page"></span><button id="wb-next" type="button">下一页 →</button></div>
+          <p class="wb-library-footnote">让读过的词，成为自己的表达。<br />作文中保存的摘录也会收进这里。</p>
+        </aside>
+        <section class="wb-detail" aria-label="词条详情">
+          <button class="text-action wb-back" type="button" id="wb-back">← 返回词库</button>
+          <div id="wb-detail-content"></div>
+        </section>
+      </section>
 
       <div class="workspace" id="workspace">
         <aside class="library-panel" aria-label="我的笔记">
@@ -207,6 +247,9 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="api-client.js"></script>
     <script src="essay-utils.js"></script>
+    <script src="password-visibility.js"></script>
+    <script src="wordbook.js"></script>
+    <script src="ai-settings.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

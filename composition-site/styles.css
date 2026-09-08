@@ -114,6 +114,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .essay-word:f
 .auth-code-row input { flex: 1; min-width: 0; letter-spacing: .18em; }
 .auth-code-row .secondary-button { flex: none; white-space: nowrap; }
 .code-hint { margin: 8px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.6; }
+.password-field { position: relative; }
+.password-field input { padding-right: 50px; }
+.password-toggle { position: absolute; top: 50%; right: 4px; display: grid; width: 40px; height: 40px; padding: 0; place-items: center; transform: translateY(-50%); color: var(--moss); border: 0; border-radius: 2px; background: transparent; }
+.password-toggle:hover { background: rgba(229,223,207,.72); }
+.password-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+.password-toggle[aria-pressed="true"] .password-eye-slash { opacity: 0; }
+.password-toggle[aria-pressed="true"] { color: var(--moss-bright); }
 .forgot-link {
   display: block;
   margin: 9px 0 0;
@@ -612,3 +619,12 @@ input:focus, textarea:focus { border-color: var(--moss); box-shadow: 0 0 0 3px r
 @media (forced-colors: active) {
   .essay-body::selection, .essay-body::-moz-selection { color: revert; background: revert; }
 }
+#ai-settings-dialog { width: min(560px, calc(100vw - 32px)); max-height: 90dvh; overflow-y: auto; }
+#ai-settings-dialog select { width: 100%; padding: 12px; border: 1px solid #bac9bf; border-radius: 4px; background: #faf9f3; color: #204c3c; font: inherit; }
+.ai-settings-intro { line-height: 1.8; color: #526258; }
+.ai-signup-links { display: flex; flex-wrap: wrap; gap: 14px; margin: 20px 0; }
+.ai-signup-links a { color: #24533f; font-size: 14px; text-underline-offset: 5px; }
+.ai-settings-help { font-size: 13px; color: #68756c; line-height: 1.8; }
+.ai-settings-model { font-size: 14px; color: #24533f; }
+.ai-settings-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+#ai-settings-status { min-height: 24px; font-size: 14px; line-height: 1.7; }

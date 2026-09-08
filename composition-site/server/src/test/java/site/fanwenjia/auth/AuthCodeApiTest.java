@@ -43,6 +43,14 @@ class AuthCodeApiTest {
     private SmtpVerificationEmailSender emailSender;
 
     @Test
+    void invalidLoginReturnsSafeActionableMessage() throws Exception {
+        mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"invalid\",\"password\":\"private-input\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("请检查邮箱、密码及验证码的格式和长度。"));
+    }
+
+    @Test
     void registerSendCodeSendsOnceThenThrottlesTheResend() throws Exception {
         mockMvc.perform(post("/api/auth/register/send-code")
                         .contentType(MediaType.APPLICATION_JSON)

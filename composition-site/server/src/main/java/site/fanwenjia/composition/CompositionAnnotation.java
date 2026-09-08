@@ -121,6 +121,10 @@ public class CompositionAnnotation {
         return id;
     }
 
+    public Composition getComposition() {
+        return composition;
+    }
+
     public int getContentVersion() {
         return contentVersion;
     }

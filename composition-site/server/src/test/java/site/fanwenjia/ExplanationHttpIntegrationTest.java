@@ -41,7 +41,7 @@ class ExplanationHttpIntegrationTest {
     private int port;
 
     @Test
-    void missingTranslationConfigurationReturns503OverTheRealHttpServer() {
+    void missingAccountAiConfigurationReturns428OverTheRealHttpServer() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         String email = "real-http-" + suffix + "@example.com";
         String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
@@ -85,7 +85,7 @@ class ExplanationHttpIntegrationTest {
                 Map.class
         );
 
-        assertThat(explanation.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(explanation.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
     }
 
     private String url(String path) {

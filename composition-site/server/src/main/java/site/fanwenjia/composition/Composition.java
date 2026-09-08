@@ -38,7 +38,7 @@ public class Composition {
     private String sourceLabel;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100_000, columnDefinition = "LONGTEXT")
     private String content;
 
     @Column(nullable = false)

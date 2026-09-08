@@ -3,8 +3,9 @@
 
   const previewUtils = window.CompositionPreviewUtils;
   const apiModule = window.CompositionApiClient;
-  if (!previewUtils || !apiModule) {
-    console.error('写译笔记本没有加载完整，请刷新页面后重试。');
+  const passwordVisibilityModule = window.PasswordVisibility;
+  if (!previewUtils || !apiModule || !passwordVisibilityModule) {
+    console.error('VocabNote 没有加载完整，请刷新页面后重试。');
     return;
   }
 
@@ -34,6 +35,7 @@
     sendCodeButton: document.querySelector('#send-code-button'),
     authCodeHint: document.querySelector('#auth-code-hint'),
     authPassword: document.querySelector('#auth-password'),
+    authPasswordToggle: document.querySelector('#auth-password-toggle'),
     authPasswordLabel: document.querySelector('#auth-password-label'),
     forgotPasswordLink: document.querySelector('#forgot-password-link'),
     rememberMe: document.querySelector('#remember-me'),
@@ -100,6 +102,7 @@
   let toastTimer = null;
   let listRequestId = 0;
   let detailRequestId = 0;
+  let activeView = 'wordbook';
   const explanationCache = new Map();
   let translationUnavailableUntil = 0;
   let hoverTimer = null;
@@ -353,7 +356,7 @@
     dom.authFormKicker.textContent = isReset ? 'PASSWORD HELP' : (isRegister ? 'NEW ARCHIVE' : 'WELCOME BACK');
     dom.authFormTitle.textContent = isReset
       ? '重置你的密码'
-      : (isRegister ? '建一个只属于你的写译笔记本' : '进入你的写译笔记本');
+      : (isRegister ? '创建你的 VocabNote 账户' : '进入 VocabNote');
     dom.authFormCopy.textContent = isReset
       ? '输入注册邮箱收到的验证码，设置新密码；重置后所有已登录设备需重新登录。'
       : (isRegister
@@ -364,6 +367,7 @@
     dom.authFormError.textContent = '';
     dom.authCodeHint.textContent = '';
     if (resetForm) dom.authForm.reset();
+    authPasswordVisibility.reset();
   }
 
   function stopCodeCountdown() {
@@ -436,6 +440,10 @@
   }
 
   function showAuthGate(message = '') {
+    aiSettings.reset();
+    ++listRequestId;
+    ++detailRequestId;
+    wordbook.reset();
     state.currentUser = null;
     state.essays = [];
     state.selectedId = null;
@@ -459,6 +467,26 @@
     dom.authGate.hidden = true;
     dom.appShell.hidden = false;
     renderAll();
+    wordbook.reset();
+    switchView('wordbook');
+  }
+
+  function switchView(view, compositionId = null) {
+    activeView = view === 'compositions' ? 'compositions' : 'wordbook';
+    ++listRequestId;
+    ++detailRequestId;
+    hidePhraseAction();
+    dom.workspace.hidden = activeView !== 'compositions';
+    dom.newEssayButton.hidden = activeView !== 'compositions';
+    document.querySelectorAll('[data-site-view]').forEach(button => {
+      if (button.dataset.siteView === activeView) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    wordbook.setActive(activeView === 'wordbook' && Boolean(state.currentUser));
+    if (activeView === 'compositions' && state.currentUser) {
+      if (compositionId && isMobileLayout()) dom.workspace.classList.add('show-reader');
+      void loadEssays(compositionId || state.selectedId);
+    }
   }
 
   function errorMessage(error, fallback) {
@@ -492,6 +520,7 @@
       renderAll();
       if (nextId) await loadSelectedEssay(nextId);
     } catch (error) {
+      if (requestId !== listRequestId) return;
       if (!handleExpiredSession(error)) showToast(errorMessage(error, '暂时无法读取你的范文。'));
     }
   }
@@ -514,6 +543,7 @@
       state.selectedEssay = essay;
       renderReader();
     } catch (error) {
+      if (requestId !== detailRequestId) return;
       if (handleExpiredSession(error)) return;
       if (error instanceof ApiError && error.status === 404) {
         await loadEssays();
@@ -574,10 +604,9 @@
         : await api.login({ email, password }, { remember });
       state.currentUser = result.user;
       showApp();
-      await loadEssays();
       showToast(`欢迎回来，${result.user.displayName}。`);
     } catch (error) {
-      dom.authFormError.textContent = authErrorText(error, '暂时无法进入写译笔记本。');
+      dom.authFormError.textContent = authErrorText(error, '暂时无法进入 VocabNote。');
     } finally {
       setButtonBusy(dom.authSubmitButton, false);
     }
@@ -585,6 +614,9 @@
 
   async function logout() {
     dom.logoutButton.disabled = true;
+    wordbook.reset();
+    ++listRequestId;
+    ++detailRequestId;
     try {
       await api.logout();
     } catch (error) {
@@ -592,7 +624,7 @@
     } finally {
       dom.logoutButton.disabled = false;
       showAuthGate();
-      showToast('你已退出写译笔记本。');
+      showToast('你已退出 VocabNote。');
     }
   }
 
@@ -633,7 +665,7 @@
       renderAll();
       if (isMobileLayout()) dom.workspace.classList.add('show-reader');
       void refreshEssayList();
-      showToast('范文已收入你的写译笔记本。');
+      showToast('范文已收入你的 VocabNote。');
     } catch (error) {
       if (!handleExpiredSession(error)) dom.essayFormError.textContent = errorMessage(error, '范文暂时没有保存成功。');
     } finally {
@@ -846,7 +878,9 @@
           || pendingAnnotation.endOffset !== selection.endOffset) return;
       setExplanationLoading(
         false,
-        error instanceof ApiError && error.status === 503
+        error instanceof ApiError && error.status === 428
+          ? '请先在右上角「AI 设置」配置自己的 API Key；仍可手动填写。'
+          : error instanceof ApiError && error.status === 503
           ? '语境翻译暂不可用；仍可手动填写释义或记忆提示。'
           : '暂时无法取得语境释义；仍可手动填写释义或记忆提示。'
       );
@@ -1150,6 +1184,7 @@
       window.setTimeout(() => (dom.authEmail.value ? dom.authCode : dom.authEmail).focus(), 0);
     });
     dom.sendCodeButton.addEventListener('click', () => void requestVerificationCode());
+    dom.authPasswordToggle.addEventListener('click', () => authPasswordVisibility.toggle());
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));
     dom.logoutButton.addEventListener('click', () => void logout());
     dom.newEssayButton.addEventListener('click', openEssayDialog);
@@ -1177,7 +1212,10 @@
     });
     dom.essayForm.addEventListener('submit', (event) => void saveEssay(event));
     dom.noteForm.addEventListener('submit', (event) => void saveNote(event));
-    dom.backToLibrary.addEventListener('click', () => dom.workspace.classList.remove('show-reader'));
+    dom.backToLibrary.addEventListener('click', () => {
+      hidePhraseAction();
+      dom.workspace.classList.remove('show-reader');
+    });
 
     dom.essayList.addEventListener('click', (event) => {
       const deleteButton = event.target.closest('[data-delete-essay]');
@@ -1236,12 +1274,31 @@
     try {
       state.currentUser = await api.currentUser();
       showApp();
-      await loadEssays();
     } catch (error) {
       api.clearToken();
       showAuthGate('登录状态已失效，请重新登录。');
     }
   }
+
+  const authPasswordVisibility = passwordVisibilityModule.createPasswordVisibilityController({
+    input: dom.authPassword,
+    button: dom.authPasswordToggle
+  });
+  const wordbook = window.Wordbook.init({
+    api,
+    onUnauthorized: () => showAuthGate('登录状态已失效，请重新登录。'),
+    onOpenComposition: (id) => switchView('compositions', String(id))
+  });
+  const aiSettings = window.AiSettings.init({
+    api,
+    onUnauthorized: () => showAuthGate('登录状态已失效，请重新登录。'),
+    onChanged: () => { explanationCache.clear(); translationUnavailableUntil = 0; }
+  });
+  document.querySelectorAll('[data-site-view]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (state.currentUser && !dom.logoutButton.disabled) switchView(button.dataset.siteView);
+    });
+  });
 
   void bootstrap();
 })();

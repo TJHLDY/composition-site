@@ -1,3 +1,13 @@
+# Current project (2026-09-08)
+
+The workspace root is now the Git repository for VocabNote, tracking private GitHub repository TJHLDY/composition-site on main. The active app is composition-site/ (Java 17+, Spring Boot, plain JavaScript frontend, MySQL). The vocabulary/ and vocabulary-frontend/ folders below are legacy references and excluded from this repository.
+
+Start locally with composition-site/scripts/start-local.ps1; add -Build after edits. Local MySQL credentials, SMTP authorization, and legacy encryption key files live in ignored local files and must never be committed. Personal AI settings support DeepSeek and Taotoken; API keys are stored as plaintext in user_ai_settings.api_key at the owner's explicit request. Never restore global-key fallback or encryption without discussing the behavior change.
+
+The historical notes below describe the old application, not the active site. Use composition-site/README.md for current operation.
+
+---
+
 # VocabNote Project Context for Codex
 
 Last reviewed: 2026-05-26

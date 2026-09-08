@@ -44,6 +44,25 @@ class CompositionApiTest {
     private VerificationCodeStore verificationCodeStore;
 
     @Test
+    void savesAndReadsLongMultilingualContentWithoutTruncation() throws Exception {
+        String token = register("long-essay@example.com", "Reader");
+        String content = "Learning English matters. 学习与记录。\n".repeat(2500);
+        MvcResult created = mockMvc.perform(post("/api/compositions")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("title", "Long essay", "content", content))))
+                .andExpect(status().isCreated()).andReturn();
+        long id = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+        mockMvc.perform(get("/api/compositions/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").value(content.strip()));
+        mockMvc.perform(post("/api/compositions")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("title", "Too long", "content", "a".repeat(100_001)))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void servesTheStandaloneFrontendAndUses401ForProtectedRoutes() throws Exception {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
@@ -53,7 +72,7 @@ class CompositionApiTest {
                 .andExpect(result -> assertThat(new String(
                         result.getResponse().getContentAsByteArray(),
                         StandardCharsets.UTF_8
-                )).contains("写译笔记本"));
+                )).contains("VocabNote"));
         mockMvc.perform(get("/styles.css")).andExpect(status().isOk());
         mockMvc.perform(get("/api-client.js")).andExpect(status().isOk());
         mockMvc.perform(get("/app.js")).andExpect(status().isOk());
@@ -227,7 +246,7 @@ class CompositionApiTest {
                                 "kind", "word",
                                 "contentVersion", 1
                         ))))
-                .andExpect(status().isServiceUnavailable());
+                .andExpect(status().is(428));
     }
 
     private String register(String email, String displayName) throws Exception {

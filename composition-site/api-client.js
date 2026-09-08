@@ -158,7 +158,7 @@
         }
       }
       if (!response.ok) {
-        if (response.status === 401) clearToken();
+        if (response.status === 401 && token === getToken()) clearToken();
         const message = payload && (payload.detail || payload.message || payload.error);
         throw new ApiError(response.status, message || '请求没有完成，请稍后再试。');
       }
@@ -196,6 +196,27 @@
         requiresAuth: false
       }),
       currentUser: () => request('/api/auth/me'),
+      listWordbook: (filters = {}) => {
+        const params = new URLSearchParams();
+        for (const key of ['kind', 'q', 'exact', 'page', 'size']) {
+          if (key === 'kind' && filters.exact !== undefined) continue;
+          if (filters[key] !== undefined && filters[key] !== null) params.set(key, String(filters[key]));
+        }
+        return request(`/api/wordbook?${params}`);
+      },
+      createWordbook: (payload) => request('/api/wordbook', { method: 'POST', body: payload }),
+      readWordbook: (id) => request(`/api/wordbook/${encodeURIComponent(id)}`),
+      updateWordbook: (id, payload) => request(`/api/wordbook/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }),
+      deleteWordbook: (id) => request(`/api/wordbook/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+      lookupWordbook: (payload) => request('/api/wordbook/define', { method: 'POST', body: payload, timeoutMs: 45000 }),
+      lookupWordbookCollocations: (payload) => request('/api/wordbook/lookup', { method: 'POST', body: payload, timeoutMs: 45000 }),
+      getAiSettings: () => request('/api/ai-settings'),
+      saveAiSettings: (payload) => request('/api/ai-settings', { method: 'PUT', body: payload }),
+      testAiSettings: (payload) => request('/api/ai-settings/test', { method: 'POST', body: payload, timeoutMs: 25000 }),
+      deleteAiSettings: () => request('/api/ai-settings', { method: 'DELETE' }),
+      generateWordbookSentence: (payload) => request('/api/wordbook/sentence', { method: 'POST', body: payload, timeoutMs: 45000 }),
+      saveWordbookExample: (id, payload) => request(`/api/wordbook/${encodeURIComponent(id)}/examples`, { method: 'POST', body: payload }),
+      deleteWordbookExample: (id, exampleId) => request(`/api/wordbook/${encodeURIComponent(id)}/examples/${encodeURIComponent(exampleId)}`, { method: 'DELETE' }),
       async logout() {
         try {
           if (getToken()) await request('/api/auth/logout', { method: 'POST' });

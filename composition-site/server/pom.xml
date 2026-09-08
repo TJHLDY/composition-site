@@ -71,6 +71,10 @@
                     <include>api-client.js</include>
                     <include>app.js</include>
                     <include>essay-utils.js</include>
+                    <include>password-visibility.js</include>
+                    <include>wordbook.js</include>
+                    <include>ai-settings.js</include>
+                    <include>wordbook.css</include>
                 </includes>
             </resource>
             <resource>

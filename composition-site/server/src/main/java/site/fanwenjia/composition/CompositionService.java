@@ -16,15 +16,18 @@ public class CompositionService {
     private final CompositionRepository compositionRepository;
     private final CompositionAnnotationRepository annotationRepository;
     private final UserAccountRepository userAccountRepository;
+    private final site.fanwenjia.wordbook.WordbookService wordbookService;
 
     public CompositionService(
             CompositionRepository compositionRepository,
             CompositionAnnotationRepository annotationRepository,
-            UserAccountRepository userAccountRepository
+            UserAccountRepository userAccountRepository,
+            site.fanwenjia.wordbook.WordbookService wordbookService
     ) {
         this.compositionRepository = compositionRepository;
         this.annotationRepository = annotationRepository;
         this.userAccountRepository = userAccountRepository;
+        this.wordbookService = wordbookService;
     }
 
     @Transactional
@@ -72,6 +75,7 @@ public class CompositionService {
             Long compositionId,
             SaveAnnotationRequest request
     ) {
+        wordbookService.acquireOwnerLock(currentUser);
         SelectionContext selection = resolveSelection(currentUser, compositionId, new SelectionRequest(
                 request.startOffset(),
                 request.endOffset(),
@@ -95,6 +99,8 @@ public class CompositionService {
                             ? requestedLearningText
                             : existing.getLearningText();
                     existing.update(selection.kind(), translationZh, learningText, note);
+                    wordbookService.sync(currentUser, compositionId, composition.getTitle(), existing.getId(),
+                            selection.selectedText(), translationZh, note, selection.sentence());
                     composition.touch();
                     return new AnnotationSaveResult(toAnnotationView(existing), false);
                 })
@@ -113,6 +119,8 @@ public class CompositionService {
                             note
                     ));
                     composition.touch();
+                    wordbookService.sync(currentUser, compositionId, composition.getTitle(), annotation.getId(),
+                            selection.selectedText(), translationZh, note, selection.sentence());
                     return new AnnotationSaveResult(toAnnotationView(annotation), true);
                 });
     }
@@ -145,6 +153,7 @@ public class CompositionService {
 
     @Transactional
     public void deleteAnnotation(CurrentUser currentUser, Long compositionId, Long annotationId) {
+        wordbookService.acquireOwnerLock(currentUser);
         Composition composition = findOwned(currentUser, compositionId);
         CompositionAnnotation annotation = annotationRepository.findByIdAndCompositionIdAndOwnerId(
                         annotationId,
@@ -152,13 +161,16 @@ public class CompositionService {
                         currentUser.id()
                 )
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "笔记不存在"));
+        wordbookService.detach(currentUser, compositionId, annotationId);
         annotationRepository.delete(annotation);
         composition.touch();
     }
 
     @Transactional
     public void deleteComposition(CurrentUser currentUser, Long compositionId) {
+        wordbookService.acquireOwnerLock(currentUser);
         Composition composition = findOwned(currentUser, compositionId);
+        wordbookService.detach(currentUser, compositionId, null);
         annotationRepository.deleteAll(
                 annotationRepository.findByCompositionIdAndOwnerIdOrderByStartOffsetAscIdAsc(compositionId, currentUser.id())
         );

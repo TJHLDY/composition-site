@@ -71,7 +71,7 @@ class ExplanationServiceTest {
                 reader,
                 new CreateCompositionRequest("T", null, "A meaningful contribution matters.")
         );
-        when(contextualExplainer.isConfigured()).thenReturn(true);
+        when(contextualExplainer.isConfigured(any(CurrentUser.class))).thenReturn(true);
         when(contextualExplainer.explain(any(), eq(reader), eq(false))).thenReturn(new ContextualExplanation(
                 "有意义的；有价值的",
                 "可用于强调某件事的价值或影响。"
@@ -94,7 +94,7 @@ class ExplanationServiceTest {
                 reader,
                 new CreateCompositionRequest("T", null, "Combining practical experience with academic study helps students.")
         );
-        when(contextualExplainer.isConfigured()).thenReturn(true);
+        when(contextualExplainer.isConfigured(any(CurrentUser.class))).thenReturn(true);
         when(contextualExplainer.explain(any(), eq(reader), eq(false))).thenReturn(new ContextualExplanation(
                 "把实践经验与学术学习结合起来",
                 "普通释义",
@@ -126,7 +126,7 @@ class ExplanationServiceTest {
                 reader,
                 new CreateCompositionRequest("T", null, content)
         );
-        when(contextualExplainer.isConfigured()).thenReturn(true);
+        when(contextualExplainer.isConfigured(any(CurrentUser.class))).thenReturn(true);
         when(contextualExplainer.explain(any(), eq(reader), eq(false))).thenReturn(new ContextualExplanation(
                 "甲",
                 null
@@ -151,7 +151,7 @@ class ExplanationServiceTest {
                 reader,
                 new CreateCompositionRequest("T", null, "A meaningful contribution matters.")
         );
-        when(contextualExplainer.isConfigured()).thenReturn(false);
+        when(contextualExplainer.isConfigured(any(CurrentUser.class))).thenReturn(false);
 
         assertThatThrownBy(() -> explanationService.explain(
                 reader,

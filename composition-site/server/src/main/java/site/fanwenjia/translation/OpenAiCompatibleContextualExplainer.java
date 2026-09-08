@@ -22,10 +22,8 @@ import org.springframework.stereotype.Component;
  * OpenAI 兼容的语境翻译客户端。适用于任何暴露 {@code POST {base-url}/chat/completions} 的
  * 提供商（如 taotoken 中转站等）。鉴权方式为 {@code Authorization: Bearer <key>}。
  *
- * <p>配置通过环境变量注入（{@code TRANSLATION_API_KEY} / {@code TRANSLATION_BASE_URL} /
- * {@code TRANSLATION_MODEL}），未配置密钥或模型时优雅降级为“翻译暂不可用”，站点照常启动。
+ * <p>由 AccountContextualExplainer 使用当前账号的配置创建，共享 HTTP 连接池。
  */
-@Component
 class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleContextualExplainer.class);
@@ -54,7 +52,7 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
             @Value("${composition.translation.provider.disable-thinking:true}") boolean disableThinking
     ) {
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
+        this.httpClient = site.fanwenjia.aisettings.AiHttpTransport.CLIENT;
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.baseUrl = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl.trim();
         this.model = model == null ? "" : model.trim();
@@ -86,14 +84,13 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("语境翻译上游返回非 2xx：status={}, body={}",
-                        response.statusCode(), abbreviate(response.body()));
+                log.warn("语境翻译上游返回非 2xx：status={}", response.statusCode());
                 throw new TranslationUnavailableException();
             }
             return parseResponse(response.body(), generateLearningText);
         } catch (IOException exception) {
-            log.warn("语境翻译请求失败：{}", exception.toString());
-            throw new TranslationUnavailableException(exception);
+            log.warn("语境翻译请求失败：{}", exception.getClass().getSimpleName());
+            throw new TranslationUnavailableException();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new TranslationUnavailableException(exception);
@@ -149,8 +146,7 @@ class OpenAiCompatibleContextualExplainer implements ContextualExplainer {
             JsonNode response = objectMapper.readTree(body);
             String content = response.at("/choices/0/message/content").asText(null);
             if (content == null || content.isBlank()) {
-                log.warn("语境翻译上游返回空内容：finish={}, body={}",
-                        response.at("/choices/0/finish_reason").asText("?"), abbreviate(body));
+                log.warn("语境翻译上游返回空内容");
                 throw new TranslationUnavailableException();
             }
             JsonNode explanation = objectMapper.readTree(stripCodeFence(content));

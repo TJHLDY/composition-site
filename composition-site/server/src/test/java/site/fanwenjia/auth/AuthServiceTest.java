@@ -32,6 +32,22 @@ class AuthServiceTest {
     private SmtpVerificationEmailSender emailSender;
 
     @Test
+    void rejectsOversizedUtf8PasswordsBeforeConsumingVerificationCodes() {
+        String email = "utf8@example.com";
+        String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, email, Duration.ofMinutes(5));
+        assertThatThrownBy(() -> authService.register(new RegisterRequest(email, "密".repeat(25), "Reader", code)))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("72");
+        authService.register(new RegisterRequest(email, "密".repeat(24), "Reader", code));
+        assertThat(authService.login(new LoginRequest(email, "密".repeat(24))).token()).isNotBlank();
+        assertThatThrownBy(() -> authService.login(new LoginRequest(email, "密".repeat(25))))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("72");
+        String resetCode = verificationCodeStore.issue(VerificationPurpose.PASSWORD_RESET, email, Duration.ofMinutes(5));
+        assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest(email, resetCode, "密".repeat(25))))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("72");
+        authService.resetPassword(new ResetPasswordRequest(email, resetCode, "NewPassword123"));
+    }
+
+    @Test
     void registerRequiresAValidEmailCode() {
         String code = verificationCodeStore.issue(VerificationPurpose.REGISTER, "reader@example.com", Duration.ofMinutes(5));
 

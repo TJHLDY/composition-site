@@ -35,7 +35,7 @@ public class ExplanationService {
                 compositionId,
                 new SelectionRequest(request.startOffset(), request.endOffset(), request.kind(), request.contentVersion())
         );
-        if (!contextualExplainer.isConfigured()) {
+        if (!contextualExplainer.isConfigured(currentUser)) {
             throw unavailable();
         }
         CacheKey cacheKey = new CacheKey(

@@ -2,12 +2,14 @@
 /.git_real/
 /.agents/
 /.codex/
+/.gh/
 /.vscode/
 /.idea/
 /.playwright-cli/
 /target/
 /composition-site/server/target/
 /composition-site/server/data/
+**/ai-key-encryption.key
 /vocabulary/
 /vocabulary-frontend/
 /vocabulary/target/
@@ -20,3 +22,9 @@
 /yarn-error.log*
 /.cache/
 /.DS_Store
+/output/playwright/
+/mysql-runtime/
+/.superpowers/brainstorm/
+/composition-site/server/mail-local.txt
+/composition-site/scripts/*.out
+/composition-site/scripts/*.err

@@ -52,6 +52,7 @@ public class AuthService {
 
     @Transactional
     public AuthResult register(RegisterRequest request) {
+        validatePasswordBytes(request.password());
         String email = normalizeEmail(request.email());
         if (!verificationCodeStore.verify(VerificationPurpose.REGISTER, email, request.code())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码不正确或已过期");
@@ -87,6 +88,7 @@ public class AuthService {
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
+        validatePasswordBytes(request.newPassword());
         String email = normalizeEmail(request.email());
         if (!verificationCodeStore.verify(VerificationPurpose.PASSWORD_RESET, email, request.code())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码不正确或已过期");
@@ -115,6 +117,7 @@ public class AuthService {
 
     @Transactional
     public AuthResult login(LoginRequest request) {
+        validatePasswordBytes(request.password());
         UserAccount user = userAccountRepository.findByEmail(normalizeEmail(request.email()))
                 .orElseThrow(this::invalidCredentials);
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
@@ -166,6 +169,12 @@ public class AuthService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private void validatePasswordBytes(String password) {
+        if (password == null || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码过长：最多 72 个 UTF-8 字节，中文等字符会占多个字节，请缩短密码。");
+        }
     }
 
     private ResponseStatusException invalidCredentials() {

@@ -6,23 +6,17 @@ services:
     dockerfilePath: ./composition-site/Dockerfile
     healthCheckPath: /
     envVars:
+      - key: COMPOSITION_DB_URL
+        sync: false
+      - key: COMPOSITION_DB_USERNAME
+        sync: false
+      - key: COMPOSITION_DB_PASSWORD
+        sync: false
       - key: COMPOSITION_MAIL_HOST
-        value: smtp.gmail.com
+        value: smtp.163.com
       - key: COMPOSITION_MAIL_PORT
-        value: "587"
+        value: "465"
       - key: COMPOSITION_MAIL_USERNAME
-        value: tjhldy6666@gmail.com
+        sync: false
       - key: COMPOSITION_MAIL_PASSWORD
-        sync: false
-      - key: TRANSLATION_BASE_URL
-        value: https://taotoken.net/api/v1
-      - key: TRANSLATION_TEMPERATURE
-        value: "0"
-      - key: TRANSLATION_STRUCTURED_OUTPUT
-        value: "true"
-      - key: TRANSLATION_DISABLE_THINKING
-        value: "true"
-      - key: TRANSLATION_API_KEY
-        sync: false
-      - key: TRANSLATION_MODEL
         sync: false
