@@ -173,3 +173,42 @@
 .wb-pos-group { margin: 24px 0; }
 .wb-pos-label { display: flex; align-items: baseline; gap: 12px; margin: 0 0 4px; color: #24553f; font-size: 17px; }
 .wb-pos-label span { font-size: 12px; font-weight: normal; color: #74796f; }
+
+/* Desktop panels fit the viewport; long entries scroll without moving navigation. */
+@media (min-width: 901px) {
+  body { display: flow-root; }
+  .app-frame {
+    display: flex;
+    flex-direction: column;
+    width: min(1440px, calc(100% - 32px));
+    height: calc(100dvh - 32px);
+    min-height: 0;
+    margin: 16px auto;
+  }
+  .masthead { flex: none; min-height: 76px; padding: 12px 24px; }
+  .site-nav { flex: none; }
+  .site-nav button { padding-top: 12px; padding-bottom: 12px; }
+  .workspace, .wb-view { flex: 1; min-height: 0; overflow: hidden; }
+  .library-panel, .reader-panel, .wb-library, .wb-detail {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+  }
+  .library-panel, .wb-library { padding-top: 22px; padding-bottom: 18px; }
+  .reader-panel { padding-top: 24px; padding-bottom: 32px; }
+  .reader-panel:has(.reader-content[hidden]) { display: grid; align-items: center; }
+  .reader-empty { margin: 0 auto; }
+  .wb-welcome { margin: 0 auto; padding-top: 12px; padding-bottom: 12px; }
+  .wb-welcome-mark { margin-top: 18px; font-size: 4rem; }
+  .wb-welcome-rule { margin-top: 22px; }
+}
+
+@media (min-width: 901px) and (max-height: 700px) {
+  .app-frame { height: calc(100dvh - 16px); margin-top: 8px; margin-bottom: 8px; }
+  .masthead { min-height: 64px; padding-top: 8px; padding-bottom: 8px; }
+  .wb-detail { padding-top: 20px; padding-bottom: 24px; }
+  .wb-welcome-mark { margin-top: 8px; margin-bottom: 10px; font-size: 3rem; }
+  .wb-welcome h2 { margin-bottom: 12px; font-size: 1.5rem; line-height: 1.4; }
+  .wb-welcome-rule, .wb-welcome > .wb-small { display: none; }
+}

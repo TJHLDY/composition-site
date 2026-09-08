@@ -253,6 +253,7 @@ h1 { margin: 0; font-size: 1.64rem; font-weight: 700; letter-spacing: .03em; }
 .workspace { display: grid; grid-template-columns: minmax(246px, 26%) minmax(0, 1fr); min-height: 806px; }
 
 .library-panel {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: 30px 19px 22px;
@@ -273,8 +274,8 @@ h1 { margin: 0; font-size: 1.64rem; font-weight: 700; letter-spacing: .03em; }
   border-radius: 999px;
 }
 
-.essay-list { display: grid; gap: 7px; }
-.essay-list-item { position: relative; }
+.essay-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; min-width: 0; }
+.essay-list-item { position: relative; min-width: 0; }
 
 .essay-row {
   position: relative;
@@ -335,7 +336,7 @@ h1 { margin: 0; font-size: 1.64rem; font-weight: 700; letter-spacing: .03em; }
 .essay-list-item:hover .essay-delete-button { opacity: 1; }
 
 .essay-row-title, .essay-row-subtitle, .essay-row-time { display: block; }
-.essay-row-title { overflow: hidden; font-family: var(--display); font-size: 1.03rem; font-weight: 700; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.essay-row-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-height: 2.7em; overflow: hidden; overflow-wrap: anywhere; font-family: var(--display); font-size: 1.03rem; font-weight: 700; line-height: 1.35; white-space: normal; }
 .essay-row-subtitle { min-height: 1.3em; margin-top: 5px; overflow: hidden; color: var(--moss-bright); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
 .essay-row-time { margin-top: 6px; color: #939386; font-size: .69rem; }
 
@@ -380,7 +381,7 @@ h1 { margin: 0; font-size: 1.64rem; font-weight: 700; letter-spacing: .03em; }
   gap: 14px;
 }
 .essay-header h2 { margin: 0; font-size: clamp(2rem, 4.25vw, 3.55rem); line-height: 1.08; letter-spacing: -.026em; }
-.essay-title-row h2 { flex: 1; min-width: 0; }
+.essay-title-row h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .essay-title-row .preload-top-button {
   margin-top: 4px;
   flex: none;

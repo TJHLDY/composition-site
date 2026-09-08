@@ -219,7 +219,7 @@
       return `
         <div class="essay-list-item" role="listitem">
           <button class="essay-row" type="button" data-open-essay="${escapeHtml(essay.id)}" aria-current="${selected}">
-            <span class="essay-row-title">${escapeHtml(essay.title)}</span>
+            <span class="essay-row-title" title="${escapeHtml(essay.title)}">${escapeHtml(essay.title)}</span>
             <span class="essay-row-subtitle">${escapeHtml(essay.sourceLabel || '个人范文')}</span>
             <span class="essay-row-time">${formatDate(essay.updatedAt)} · ${essay.noteCount} 条摘录</span>
           </button>
