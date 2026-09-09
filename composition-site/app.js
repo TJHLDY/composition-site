@@ -11,8 +11,10 @@
 
   const {
     getEnglishPhraseCandidate,
+    getMobileWordActionState,
     isEnglishPhraseSelection,
     scheduleHoverExplanation,
+    splitEssayIntoRenderChunks,
     sortEssaysByRecent
   } = previewUtils;
   const { ApiError, createApiClient } = apiModule;
@@ -45,6 +47,12 @@
     authFormError: document.querySelector('#auth-form-error'),
     accountDisplayName: document.querySelector('#account-display-name'),
     logoutButton: document.querySelector('#logout-button'),
+    mobileMenuButton: document.querySelector('#mobile-menu-button'),
+    mobileMenuDialog: document.querySelector('#mobile-menu-dialog'),
+    mobileMenuClose: document.querySelector('#mobile-menu-close'),
+    mobileAccountDisplayName: document.querySelector('#mobile-account-display-name'),
+    mobileAiSettingsButton: document.querySelector('#mobile-ai-settings-button'),
+    mobileLogoutButton: document.querySelector('#mobile-logout-button'),
     workspace: document.querySelector('#workspace'),
     newEssayButton: document.querySelector('#new-essay-button'),
     essayList: document.querySelector('#essay-list'),
@@ -66,10 +74,17 @@
     essayNotes: document.querySelector('#essay-notes'),
     notesGroups: document.querySelector('#notes-groups'),
     notesTotal: document.querySelector('#notes-total'),
+    notesToggle: document.querySelector('#notes-toggle-button'),
     backToLibrary: document.querySelector('#back-to-library'),
     phraseAction: document.querySelector('#phrase-action'),
     phraseActionLabel: document.querySelector('#phrase-action-label'),
     explainPhraseButton: document.querySelector('#explain-phrase-button'),
+    mobileWordAction: document.querySelector('#mobile-word-action'),
+    mobileWordTerm: document.querySelector('#mobile-word-term'),
+    mobileWordMeaning: document.querySelector('#mobile-word-meaning'),
+    mobileWordStatus: document.querySelector('#mobile-word-status'),
+    mobileWordRecord: document.querySelector('#mobile-word-record'),
+    mobileWordClose: document.querySelector('#mobile-word-close'),
     essayDialog: document.querySelector('#essay-dialog'),
     essayForm: document.querySelector('#essay-form'),
     essayTitle: document.querySelector('#essay-title'),
@@ -115,6 +130,12 @@
   let phraseActionTimer = null;
   let preloadRequestId = 0;
   let preloadTimer = null;
+  let essayRenderFrame = null;
+  let essayRenderId = 0;
+  let pendingMobileWord = null;
+  let mobileWordNode = null;
+  let mobileWordRequestId = 0;
+  let notesCollapsed = false;
   let sendCodeTimer = null;
   let sendCodeSecondsLeft = 0;
 
@@ -202,7 +223,9 @@
   }
 
   function renderAccount() {
-    dom.accountDisplayName.textContent = state.currentUser ? state.currentUser.displayName : '';
+    const displayName = state.currentUser ? state.currentUser.displayName : '';
+    dom.accountDisplayName.textContent = displayName;
+    dom.mobileAccountDisplayName.textContent = displayName;
   }
 
   function renderEssayList() {
@@ -232,6 +255,7 @@
     dom.readerContent.hidden = !essay;
     dom.readerEmpty.hidden = Boolean(essay);
     if (!essay) {
+      cancelEssayRender();
       preloadRequestId += 1;
       window.clearTimeout(preloadTimer);
       dom.preloadStatus.hidden = true;
@@ -248,12 +272,13 @@
     dom.readerDate.textContent = `更新于 ${formatDate(essay.updatedAt)}`;
     dom.readerWordCount.textContent = `${wordCount(essay.content)} words`;
     dom.readerNoteCount.textContent = `${essay.annotations.length} 条摘录`;
-    dom.essayBody.innerHTML = buildInteractiveHtml(essay.content);
+    renderEssayBody(essay);
     watchPreload(essay);
     renderNotes(essay);
+    renderNotesVisibility();
   }
 
-  function buildInteractiveHtml(content) {
+  function buildInteractiveHtml(content, baseOffset = 0) {
     const pattern = /[A-Za-z]+(?:['’-][A-Za-z]+)*/g;
     let output = '';
     let cursor = 0;
@@ -262,10 +287,80 @@
       const start = match.index;
       const end = start + text.length;
       output += escapeHtml(content.slice(cursor, start));
-      output += `<span class="essay-word" role="button" tabindex="0" data-start="${start}" data-end="${end}" data-gloss="点击记录这条语境">${escapeHtml(text)}</span>`;
+      output += `<span class="essay-word" role="button" tabindex="0" data-start="${baseOffset + start}" data-end="${baseOffset + end}" data-gloss="点击记录这条语境">${escapeHtml(text)}</span>`;
       cursor = end;
     }
     return output + escapeHtml(content.slice(cursor));
+  }
+
+  function cancelEssayRender() {
+    essayRenderId += 1;
+    if (essayRenderFrame !== null) {
+      const cancel = window.cancelAnimationFrame || window.clearTimeout;
+      cancel(essayRenderFrame);
+      essayRenderFrame = null;
+    }
+  }
+
+  function hydrateCachedGlosses(essay, scope) {
+    scope.querySelectorAll('.essay-word').forEach((wordNode) => {
+      const startOffset = Number(wordNode.dataset.start);
+      const endOffset = Number(wordNode.dataset.end);
+      const cachedExplanation = explanationCache.get(explanationCacheKey(essay, startOffset, endOffset));
+      if (!cachedExplanation) return;
+      wordNode.dataset.gloss = '正在读取语境释义…';
+      void cachedExplanation.then((explanation) => {
+        if (currentEssay()?.id !== essay.id || currentEssay()?.contentVersion !== essay.contentVersion) return;
+        wordNode.dataset.gloss = explanation.translationZh || '点击记录这条语境';
+        wordNode.dataset.ready = 'true';
+      }).catch(() => {
+        if (currentEssay()?.id === essay.id && currentEssay()?.contentVersion === essay.contentVersion) {
+          wordNode.dataset.gloss = '点击记录这条语境';
+        }
+      });
+    });
+  }
+
+  function renderEssayBody(essay) {
+    cancelEssayRender();
+    const renderId = essayRenderId;
+    const chunks = splitEssayIntoRenderChunks(essay.content);
+    let cursor = 0;
+    dom.essayBody.replaceChildren();
+    dom.essayBody.setAttribute('aria-busy', String(chunks.length > 1));
+
+    function appendChunkBatch(size) {
+      const fragment = document.createDocumentFragment();
+      const end = Math.min(cursor + size, chunks.length);
+      while (cursor < end) {
+        const chunk = chunks[cursor++];
+        const chunkNode = document.createElement('span');
+        chunkNode.className = 'essay-render-chunk';
+        chunkNode.innerHTML = buildInteractiveHtml(chunk.text, chunk.start);
+        fragment.appendChild(chunkNode);
+      }
+      hydrateCachedGlosses(essay, fragment);
+      dom.essayBody.appendChild(fragment);
+    }
+
+    appendChunkBatch(1);
+    const renderNext = () => {
+      if (renderId !== essayRenderId || currentEssay()?.id !== essay.id || currentEssay()?.contentVersion !== essay.contentVersion) return;
+      appendChunkBatch(2);
+      if (cursor < chunks.length) {
+        const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+        essayRenderFrame = schedule(renderNext);
+      } else {
+        essayRenderFrame = null;
+        dom.essayBody.setAttribute('aria-busy', 'false');
+      }
+    };
+    if (cursor < chunks.length) {
+      const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+      essayRenderFrame = schedule(renderNext);
+    } else {
+      dom.essayBody.setAttribute('aria-busy', 'false');
+    }
   }
 
   function renderNotes(essay) {
@@ -283,6 +378,21 @@
           ${groupNotes.length ? `<div class="note-list">${groupNotes.map(renderNoteRow).join('')}</div>` : `<div class="empty-notes">还没有${label}摘录。<strong>${kind === 'word' ? '点击一个词' : '拖选一段短语'}</strong>，再决定是否保存。</div>`}
         </section>`;
     }).join('');
+  }
+
+  function renderNotesVisibility() {
+    const canCollapse = isMobileLayout();
+    const collapsed = canCollapse && notesCollapsed;
+    dom.essayNotes.classList.toggle('is-collapsed', collapsed);
+    dom.notesToggle.hidden = !canCollapse;
+    dom.notesToggle.setAttribute('aria-expanded', String(!collapsed));
+    dom.notesToggle.textContent = collapsed ? '查看摘录' : '收起';
+  }
+
+  function toggleNotes() {
+    if (!isMobileLayout()) return;
+    notesCollapsed = !notesCollapsed;
+    renderNotesVisibility();
   }
 
   function renderNoteRow(note) {
@@ -449,7 +559,10 @@
     pendingAnnotation = null;
     explanationCache.clear();
     translationUnavailableUntil = 0;
+    cancelEssayRender();
     hidePhraseAction();
+    hideMobileWordAction();
+    closeMobileMenu();
     dom.appShell.hidden = true;
     dom.authGate.hidden = false;
     setAuthMode('login', false);
@@ -474,6 +587,9 @@
     ++listRequestId;
     ++detailRequestId;
     hidePhraseAction();
+    hideMobileWordAction();
+    closeMobileMenu();
+    if (activeView !== 'compositions') cancelEssayRender();
     dom.workspace.hidden = activeView !== 'compositions';
     dom.newEssayButton.hidden = activeView !== 'compositions';
     document.querySelectorAll('[data-site-view]').forEach(button => {
@@ -555,6 +671,8 @@
     if (!state.essays.some((essay) => essay.id === id)) return;
     state.selectedId = id;
     state.selectedEssay = null;
+    notesCollapsed = isMobileLayout();
+    hideMobileWordAction();
     renderAll();
     if (shouldOpenMobile && isMobileLayout()) dom.workspace.classList.add('show-reader');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -959,6 +1077,7 @@
       hidePhraseAction();
       return;
     }
+    hideMobileWordAction();
     pendingPhrase = selectionData;
     dom.phraseActionLabel.textContent = `已选中 ${selectionData.wordCount} 个词`;
     dom.explainPhraseButton.textContent = '记录短语';
@@ -974,11 +1093,92 @@
     pendingPhrase = null;
   }
 
+  function hideMobileWordAction() {
+    mobileWordRequestId += 1;
+    pendingMobileWord = null;
+    if (mobileWordNode) mobileWordNode.classList.remove('mobile-word-active');
+    mobileWordNode = null;
+    dom.mobileWordAction.hidden = true;
+  }
+
+  function openMobileWordAction(wordNode) {
+    const essay = currentEssay();
+    if (!essay) return;
+    const startOffset = Number(wordNode.dataset.start);
+    const endOffset = Number(wordNode.dataset.end);
+    const selectedText = essay.content.slice(startOffset, endOffset);
+    const existing = annotationAtRange(essay, startOffset, endOffset);
+    const cacheKey = explanationCacheKey(essay, startOffset, endOffset);
+    const cachedExplanation = explanationCache.get(cacheKey);
+    const hasExplanation = Boolean(existing?.translationZh || cachedExplanation || wordNode.dataset.ready === 'true');
+    const actionState = getMobileWordActionState({
+      hasSavedNote: Boolean(existing),
+      hasExplanation,
+      preloadPaused: dom.preloadStatus.dataset.state === 'paused'
+    });
+    const requestId = ++mobileWordRequestId;
+    if (mobileWordNode && mobileWordNode !== wordNode) mobileWordNode.classList.remove('mobile-word-active');
+    mobileWordNode = wordNode;
+    mobileWordNode.classList.add('mobile-word-active');
+    pendingMobileWord = {
+      kind: 'word',
+      selectedText,
+      startOffset,
+      endOffset,
+      context: sourceSentence(essay.content, startOffset, endOffset)
+    };
+    dom.mobileWordTerm.textContent = selectedText;
+    dom.mobileWordRecord.textContent = actionState.actionLabel;
+    dom.mobileWordStatus.textContent = actionState.helperText;
+    dom.mobileWordMeaning.textContent = existing?.translationZh || (hasExplanation ? '正在读取语境释义…' : actionState.helperText);
+    dom.mobileWordAction.hidden = false;
+
+    const explanation = cachedExplanation || (actionState.shouldRequestExplanation
+      ? requestExplanation(essay, { kind: 'word', startOffset, endOffset })
+      : null);
+    if (!explanation) return;
+    void explanation.then((result) => {
+      if (requestId !== mobileWordRequestId || mobileWordNode !== wordNode) return;
+      const translation = result.translationZh || '暂未返回中文释义。';
+      wordNode.dataset.gloss = translation;
+      wordNode.dataset.ready = 'true';
+      dom.mobileWordMeaning.textContent = translation;
+      dom.mobileWordStatus.textContent = '已加载本篇语境释义。';
+    }).catch((error) => {
+      if (requestId !== mobileWordRequestId || mobileWordNode !== wordNode || handleExpiredSession(error)) return;
+      const message = error instanceof ApiError && (error.status === 428 || error.status === 429 || error.status === 503)
+        ? error.message || '语境释义暂不可用。'
+        : '暂时无法取得语境释义。';
+      wordNode.dataset.gloss = '点击收录后可手动填写释义。';
+      dom.mobileWordMeaning.textContent = '暂时无法取得语境释义。';
+      dom.mobileWordStatus.textContent = `${message} 你仍可手动收录并填写释义。`;
+    });
+  }
+
+  function openMobileWordNote() {
+    const pending = pendingMobileWord;
+    if (!pending) return;
+    hideMobileWordAction();
+    openNoteDialog(pending);
+  }
+
+  function openMobileMenu() {
+    if (dom.mobileMenuDialog.open) return;
+    openDialog(dom.mobileMenuDialog);
+    dom.mobileMenuButton.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeMobileMenu() {
+    if (dom.mobileMenuDialog.open) closeDialog(dom.mobileMenuDialog);
+    dom.mobileMenuButton.setAttribute('aria-expanded', 'false');
+  }
+
   function openSelectedPhrase() {
     const essay = currentEssay();
     if (!essay || !pendingPhrase) return;
     const phrase = pendingPhrase;
     hidePhraseAction();
+    hideMobileWordAction();
     openNoteDialog({
       kind: 'phrase',
       ...phrase,
@@ -991,6 +1191,11 @@
     if (selection && !selection.isCollapsed && selection.toString().trim()) return;
     const essay = currentEssay();
     if (!essay) return;
+    if (isMobileLayout()) {
+      hidePhraseAction();
+      openMobileWordAction(wordNode);
+      return;
+    }
     const startOffset = Number(wordNode.dataset.start);
     const endOffset = Number(wordNode.dataset.end);
     const selectedText = essay.content.slice(startOffset, endOffset);
@@ -1004,6 +1209,7 @@
   }
 
   function beginWordHover(wordNode) {
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     const essay = currentEssay();
     if (!essay) return;
     window.clearTimeout(hoverTimer);
@@ -1129,6 +1335,17 @@
     dom.authPasswordToggle.addEventListener('click', () => authPasswordVisibility.toggle());
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));
     dom.logoutButton.addEventListener('click', () => void logout());
+    dom.mobileMenuButton.addEventListener('click', openMobileMenu);
+    dom.mobileMenuClose.addEventListener('click', closeMobileMenu);
+    dom.mobileMenuDialog.addEventListener('close', () => dom.mobileMenuButton.setAttribute('aria-expanded', 'false'));
+    dom.mobileAiSettingsButton.addEventListener('click', () => {
+      closeMobileMenu();
+      void aiSettings.open();
+    });
+    dom.mobileLogoutButton.addEventListener('click', () => {
+      closeMobileMenu();
+      void logout();
+    });
     dom.newEssayButton.addEventListener('click', openEssayDialog);
     document.querySelector('#edit-essay-button').addEventListener('click', openEditEssayDialog);
     dom.preloadRetry.addEventListener('click', () => void retryPreload());
@@ -1151,8 +1368,10 @@
     dom.noteForm.addEventListener('submit', (event) => void saveNote(event));
     dom.backToLibrary.addEventListener('click', () => {
       hidePhraseAction();
+      hideMobileWordAction();
       dom.workspace.classList.remove('show-reader');
     });
+    dom.notesToggle.addEventListener('click', toggleNotes);
 
     dom.essayList.addEventListener('click', (event) => {
       const deleteButton = event.target.closest('[data-delete-essay]');
@@ -1190,12 +1409,16 @@
 
     dom.phraseAction.addEventListener('mousedown', (event) => event.preventDefault());
     dom.explainPhraseButton.addEventListener('click', openSelectedPhrase);
+    dom.mobileWordClose.addEventListener('click', hideMobileWordAction);
+    dom.mobileWordRecord.addEventListener('click', openMobileWordNote);
     document.addEventListener('selectionchange', schedulePhraseAction);
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !dom.phraseAction.hidden) hidePhraseAction();
     });
     window.addEventListener('resize', () => {
       if (!isMobileLayout()) dom.workspace.classList.remove('show-reader');
+      if (!isMobileLayout()) notesCollapsed = false;
+      renderNotesVisibility();
       const selection = window.getSelection();
       if (selectionInsideEssay(selection)) updatePhraseAction();
     });

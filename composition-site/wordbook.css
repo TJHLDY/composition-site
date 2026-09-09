@@ -128,16 +128,19 @@
   .site-nav button { gap: 7px; padding: 15px 0; font-size: .8rem; }
   .site-nav button span { font-size: .71rem; }
   .wb-view { display: block; min-height: 660px; }
-  .wb-library { border-right: 0; padding: 25px 23px; min-height: 620px; }
+  .wb-library { border-right: 0; padding: 18px 23px 25px; min-height: 620px; }
   .wb-library-heading h2 { font-size: 1.1rem; }
-  .wb-search { margin-top: 24px; }
+  .wb-search { position: sticky; z-index: 5; top: 0; margin: 0 0 17px; padding: 16px 0 12px; background: linear-gradient(180deg, rgba(242,239,229,.98) 82%, rgba(242,239,229,.8), transparent); }
   .wb-search-row input { font-size: 16px; }
+  .wb-search-row { min-height: 44px; }
+  .wb-search-row button { min-width: 76px; min-height: 44px; }
+  .wb-kinds button { min-height: 44px; }
   .wb-library-footnote { margin-top: 24px; }
   .wb-entry { min-height: 79px; padding: 17px 14px; }
   .wb-detail { display: none; padding: 23px 24px 35px; }
   .wb-show-detail .wb-library { display: none; }
   .wb-show-detail .wb-detail { display: block; }
-  .wb-back { display: inline-flex; }
+  .wb-back { position: sticky; z-index: 5; top: 0; display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 16px; padding: 8px 0; background: rgba(251,250,245,.96); }
   .wb-term-header { padding-top: 25px; }
   .wb-term-header h2 { font-size: clamp(2.3rem, 10vw, 3.5rem); }
   .wb-detail-top { gap: 10px; }
@@ -149,10 +152,12 @@
   .wb-fill { padding: 12px; }
   .wb-example { padding: 15px; }
   .wb-example-actions { gap: 15px; }
-  .wb-view .text-action, .wb-delete-link, .wb-source { min-height: 40px; }
+  .wb-view .primary-button, .wb-view .secondary-button, .wb-view .text-action, .wb-delete-link, .wb-source { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  .site-nav button span { display: none; }
 }
 @media (max-width: 380px) {
-  .site-nav button span { display: none; }
   .wb-library, .wb-detail { padding-right: 18px; padding-left: 18px; }
   .wb-detail-top { align-items: flex-start; flex-direction: column; }
 }

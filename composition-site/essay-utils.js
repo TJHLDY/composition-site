@@ -5,6 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createCompositionPreviewUtilities() {
   const MAX_PHRASE_LENGTH = 500;
   const HOVER_EXPLANATION_DELAY_MS = 150;
+  const WORD_CHARACTER = /[A-Za-z'’\-]/;
 
   function updatedTimestamp(essay) {
     const timestamp = Date.parse(essay && essay.updatedAt);
@@ -53,6 +54,54 @@
     return setTimeoutImpl(onRun, HOVER_EXPLANATION_DELAY_MS);
   }
 
+  function getMobileWordActionState({ hasSavedNote = false, hasExplanation = false, preloadPaused = false } = {}) {
+    if (hasExplanation) {
+      return {
+        actionLabel: hasSavedNote ? '编辑摘录' : '收录单词',
+        helperText: '已加载本篇语境释义。',
+        shouldRequestExplanation: false
+      };
+    }
+    if (preloadPaused) {
+      return {
+        actionLabel: hasSavedNote ? '编辑摘录' : '收录单词',
+        helperText: '此词尚未预加载；你仍可手动收录并填写释义。',
+        shouldRequestExplanation: false
+      };
+    }
+    return {
+      actionLabel: hasSavedNote ? '编辑摘录' : '收录单词',
+      helperText: '正在读取本篇语境释义。',
+      shouldRequestExplanation: true
+    };
+  }
+
+  function splitEssayIntoRenderChunks(value, maxChunkLength = 12000) {
+    const content = String(value || '');
+    const chunkLength = Math.max(1, Math.floor(Number(maxChunkLength) || 12000));
+    const chunks = [];
+    let start = 0;
+    while (start < content.length) {
+      let end = Math.min(start + chunkLength, content.length);
+      if (end < content.length) {
+        const candidates = [
+          content.lastIndexOf('\n', end),
+          content.lastIndexOf(' ', end),
+          content.lastIndexOf('\t', end)
+        ].filter(index => index > start + Math.floor(chunkLength * 0.5));
+        if (candidates.length) end = Math.max(...candidates);
+        while (
+          end < content.length
+          && WORD_CHARACTER.test(content[end - 1])
+          && WORD_CHARACTER.test(content[end])
+        ) end += 1;
+      }
+      chunks.push({ start, end, text: content.slice(start, end) });
+      start = end;
+    }
+    return chunks;
+  }
+
   function createExplanationQueue({ pause = ms => new Promise(resolve => setTimeout(resolve, ms)), cooldown = 2100 } = {}) {
     const waiting = [];
     let running = false;
@@ -89,7 +138,9 @@
     createExplanationQueue,
     getEnglishPhraseCandidate,
     isEnglishPhraseSelection,
+    getMobileWordActionState,
     scheduleHoverExplanation,
+    splitEssayIntoRenderChunks,
     sortEssaysByRecent
   };
 });

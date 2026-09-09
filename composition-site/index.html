@@ -69,6 +69,9 @@
         <div class="masthead-actions">
           <button id="ai-settings-button" type="button" class="secondary-button">AI 设置</button>
           <span class="account-chip" id="account-chip"><span id="account-display-name"></span><button id="logout-button" type="button">退出</button></span>
+          <button class="icon-button mobile-menu-button" id="mobile-menu-button" type="button" aria-label="打开账户与 AI 设置" aria-haspopup="dialog" aria-expanded="false">
+            <span aria-hidden="true">⋯</span>
+          </button>
           <button class="icon-button add-button" id="new-essay-button" type="button" aria-label="新建作文">
             <span aria-hidden="true">+</span>
           </button>
@@ -165,7 +168,8 @@
 
               <p class="selection-hint">
                 <span aria-hidden="true">⌁</span>
-                悬浮查看词义；点击单词或拖选短语，把真正想记住的内容留在本篇里。
+                <span class="selection-hint-desktop">悬浮查看词义；点击单词或拖选短语，把真正想记住的内容留在本篇里。</span>
+                <span class="selection-hint-mobile">点击单词查看词义；拖选短语，把真正想记住的内容留在本篇里。</span>
               </p>
             </article>
 
@@ -176,6 +180,7 @@
                   <h2 id="notes-heading">本篇摘录</h2>
                 </div>
                 <span class="notes-total" id="notes-total">0 条</span>
+                <button class="notes-toggle" id="notes-toggle-button" type="button" aria-expanded="true">收起</button>
               </div>
               <div class="notes-groups" id="notes-groups"></div>
             </section>
@@ -188,6 +193,34 @@
       <span class="phrase-action-label" id="phrase-action-label" aria-live="polite" aria-atomic="true"></span>
       <button id="explain-phrase-button" type="button">记录短语</button>
     </div>
+
+    <section class="mobile-word-action" id="mobile-word-action" hidden role="dialog" aria-modal="false" aria-label="单词语境释义">
+      <div class="mobile-word-action-heading">
+        <span class="eyebrow">IN THIS ESSAY</span>
+        <strong id="mobile-word-term"></strong>
+      </div>
+      <p class="mobile-word-meaning" id="mobile-word-meaning"></p>
+      <p class="mobile-word-status" id="mobile-word-status" role="status" aria-live="polite"></p>
+      <div class="mobile-word-actions">
+        <button class="secondary-button" id="mobile-word-close" type="button">关闭</button>
+        <button class="primary-button" id="mobile-word-record" type="button">收录单词</button>
+      </div>
+    </section>
+
+    <dialog class="mobile-menu-dialog" id="mobile-menu-dialog" aria-labelledby="mobile-menu-title">
+      <div class="mobile-menu-sheet">
+        <div class="mobile-menu-heading">
+          <div>
+            <p class="eyebrow">ACCOUNT</p>
+            <h2 id="mobile-menu-title">学习设置</h2>
+          </div>
+          <button class="dialog-close" id="mobile-menu-close" type="button" aria-label="关闭账户菜单">×</button>
+        </div>
+        <p class="mobile-account-name" id="mobile-account-display-name"></p>
+        <button class="secondary-button" id="mobile-ai-settings-button" type="button">AI 设置</button>
+        <button class="mobile-logout-button" id="mobile-logout-button" type="button">退出登录</button>
+      </div>
+    </dialog>
 
     <dialog class="dialog essay-dialog" id="essay-dialog" aria-labelledby="essay-dialog-title">
       <form id="essay-form" novalidate>
