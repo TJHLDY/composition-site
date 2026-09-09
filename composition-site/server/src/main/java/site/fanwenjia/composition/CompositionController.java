@@ -45,6 +45,18 @@ public class CompositionController {
         return compositionService.read(currentUser, compositionId);
     }
 
+    @org.springframework.web.bind.annotation.PutMapping("/{compositionId}")
+    public CompositionView update(@AuthenticationPrincipal CurrentUser user, @PathVariable Long compositionId,
+                                  @RequestBody UpdateCompositionRequest request) {
+        return compositionService.update(user, compositionId, request);
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<java.util.Map<String,String>> statusError(org.springframework.web.server.ResponseStatusException error) {
+        return ResponseEntity.status(error.getStatusCode()).body(java.util.Map.of("message",
+                error.getReason() == null ? "操作未完成，请稍后重试。" : error.getReason()));
+    }
+
     @PostMapping("/{compositionId}/annotations")
     public ResponseEntity<AnnotationView> saveAnnotation(
             @AuthenticationPrincipal CurrentUser currentUser,

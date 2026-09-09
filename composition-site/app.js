@@ -17,6 +17,7 @@
   } = previewUtils;
   const { ApiError, createApiClient } = apiModule;
   const api = createApiClient();
+  const queueExplanation = previewUtils.createExplanationQueue();
 
   const dom = {
     authGate: document.querySelector('#auth-gate'),
@@ -57,7 +58,10 @@
     readerDate: document.querySelector('#reader-date'),
     readerWordCount: document.querySelector('#reader-word-count'),
     readerNoteCount: document.querySelector('#reader-note-count'),
-    preloadGlossaryButton: document.querySelector('#preload-glossary-button'),
+    preloadStatus: document.querySelector('#preload-status'),
+    preloadText: document.querySelector('#preload-text'),
+    preloadMeter: document.querySelector('#preload-meter'),
+    preloadRetry: document.querySelector('#preload-retry'),
     essayBody: document.querySelector('#essay-body'),
     essayNotes: document.querySelector('#essay-notes'),
     notesGroups: document.querySelector('#notes-groups'),
@@ -105,20 +109,14 @@
   let activeView = 'wordbook';
   const explanationCache = new Map();
   let translationUnavailableUntil = 0;
+  let translationUnavailableMessage = '语境翻译暂不可用。';
   let hoverTimer = null;
   let hoveredWordNode = null;
   let phraseActionTimer = null;
   let preloadRequestId = 0;
-  let isPreloadingGlossary = false;
-  let preloadStopRequested = false;
-  let preloadDoneCount = 0;
-  let preloadTotalCount = 0;
+  let preloadTimer = null;
   let sendCodeTimer = null;
   let sendCodeSecondsLeft = 0;
-  const PRELOAD_BATCH_SIZE_BASE = 10;
-  const PRELOAD_REQUEST_TIMEOUT_MS = 9000;
-  const PRELOAD_PROGRESS_STEP = 8;
-  const PRELOAD_BUTTON_TEXT = '预加载本篇单词';
 
   function normalizeAnnotation(annotation) {
     return {
@@ -235,9 +233,8 @@
     dom.readerEmpty.hidden = Boolean(essay);
     if (!essay) {
       preloadRequestId += 1;
-      isPreloadingGlossary = false;
-      dom.preloadGlossaryButton.disabled = true;
-      setPreloadButtonIdle();
+      window.clearTimeout(preloadTimer);
+      dom.preloadStatus.hidden = true;
       dom.readerEmptyTitle.textContent = isLoading ? '正在打开范文' : '从一篇范文开始';
       dom.readerEmptyCopy.textContent = isLoading
         ? '正在从你的独立账户读取这篇范文和它的词句笔记。'
@@ -252,8 +249,7 @@
     dom.readerWordCount.textContent = `${wordCount(essay.content)} words`;
     dom.readerNoteCount.textContent = `${essay.annotations.length} 条摘录`;
     dom.essayBody.innerHTML = buildInteractiveHtml(essay.content);
-    dom.preloadGlossaryButton.disabled = false;
-    if (!isPreloadingGlossary) setPreloadButtonIdle();
+    watchPreload(essay);
     renderNotes(essay);
   }
 
@@ -448,6 +444,8 @@
     state.essays = [];
     state.selectedId = null;
     state.selectedEssay = null;
+    ++preloadRequestId;
+    window.clearTimeout(preloadTimer);
     pendingAnnotation = null;
     explanationCache.clear();
     translationUnavailableUntil = 0;
@@ -628,11 +626,25 @@
     }
   }
 
+  let editingEssay = null;
   function openEssayDialog() {
+    editingEssay = null;
+    document.querySelector('#essay-dialog-title').textContent = '收进一篇范文';
     dom.essayForm.reset();
     dom.essayFormError.textContent = '';
     openDialog(dom.essayDialog);
     window.setTimeout(() => dom.essayTitle.focus(), 0);
+  }
+
+  function openEditEssayDialog() {
+    const essay = currentEssay();
+    if (!essay) return;
+    openEssayDialog();
+    editingEssay = { id: essay.id, contentVersion: essay.contentVersion };
+    document.querySelector('#essay-dialog-title').textContent = '编辑范文';
+    dom.essayTitle.value = essay.title;
+    dom.essaySourceLabel.value = essay.sourceLabel;
+    dom.essayContent.value = essay.content;
   }
 
   async function saveEssay(event) {
@@ -647,25 +659,31 @@
     }
 
     const submitButton = dom.essayForm.querySelector('button[type="submit"]');
+    if (submitButton.disabled) return;
+    const editing = editingEssay;
     setButtonBusy(submitButton, true, '保存范文');
     dom.essayFormError.textContent = '';
     try {
-      const created = normalizeEssay(await api.createComposition({
+      const payload = {
         title,
         sourceLabel: sourceLabel || null,
         content
-      }));
+      };
+      const created = normalizeEssay(await (editing
+        ? api.updateComposition(editing.id, { ...payload, contentVersion: editing.contentVersion })
+        : api.createComposition(payload)));
+      explanationCache.clear();
       state.selectedId = created.id;
       state.selectedEssay = created;
       state.essays = [
-        normalizeListItem({ ...created, noteCount: 0 }),
+        normalizeListItem({ ...created, noteCount: created.annotations.length }),
         ...state.essays.filter((essay) => essay.id !== created.id)
       ];
       closeDialog(dom.essayDialog);
       renderAll();
       if (isMobileLayout()) dom.workspace.classList.add('show-reader');
       void refreshEssayList();
-      showToast('范文已收入你的 VocabNote。');
+      showToast(editing ? '修改已保存，正在更新语境释义。' : '范文已保存，正在后台预加载语境释义。');
     } catch (error) {
       if (!handleExpiredSession(error)) dom.essayFormError.textContent = errorMessage(error, '范文暂时没有保存成功。');
     } finally {
@@ -687,7 +705,7 @@
     const cacheKey = explanationCacheKey(essay, selection.startOffset, selection.endOffset);
     if (explanationCache.has(cacheKey)) return explanationCache.get(cacheKey);
     if (Date.now() < translationUnavailableUntil) {
-      return Promise.reject(new ApiError(503, '语境翻译暂不可用。'));
+      return Promise.reject(new ApiError(503, translationUnavailableMessage));
     }
     const payload = {
       startOffset: selection.startOffset,
@@ -695,10 +713,17 @@
       kind: selection.kind,
       contentVersion: essay.contentVersion
     };
-    const pending = api.explainSelection(essay.id, payload, requestOptions).catch((error) => {
+    const requestingUser = state.currentUser;
+    const { background = false, ...apiOptions } = requestOptions;
+    const pending = queueExplanation(() => {
+      if (Date.now() < translationUnavailableUntil) throw new ApiError(503, translationUnavailableMessage);
+      return api.explainSelection(essay.id, payload, apiOptions);
+    }, { background, isCurrent: () => state.currentUser === requestingUser
+        && currentEssay()?.id === essay.id && currentEssay()?.contentVersion === essay.contentVersion }).catch((error) => {
       explanationCache.delete(cacheKey);
       if (error instanceof ApiError && error.status === 503) {
-        translationUnavailableUntil = Date.now() + 60_000;
+        translationUnavailableMessage = error.message || '语境翻译暂不可用。';
+        translationUnavailableUntil = Date.now() + 5_000;
       }
       throw error;
     });
@@ -706,149 +731,60 @@
     return pending;
   }
 
-  function preloadConcurrency(requestCount) {
-    const base = PRELOAD_BATCH_SIZE_BASE;
-    const hardware = Number(navigator.hardwareConcurrency) || 4;
-    const cpuScale = Math.max(3, Math.min(base, Math.max(2, hardware)));
-    return Math.max(3, Math.min(cpuScale, Math.max(1, Math.ceil(requestCount / 20))));
-  }
-
-  async function preloadCurrentEssayExplanations() {
-    const essay = currentEssay();
+  function watchPreload(essay) {
     const token = ++preloadRequestId;
-    if (!essay) {
-      setExplanationLoading(false, '请先打开一篇范文，再执行预加载。');
-      return;
-    }
-    if (isPreloadingGlossary) return;
-    preloadStopRequested = false;
-
-    const wordNodes = Array.from(dom.essayBody.querySelectorAll('.essay-word'));
-    if (!wordNodes.length) {
-      showToast('当前范文没有可识别的英文词。');
-      dom.preloadGlossaryButton.disabled = false;
-      setPreloadButtonIdle();
-      setExplanationLoading(false, '当前范文没有可识别的英文词可预加载。');
-      return;
-    }
-
-    isPreloadingGlossary = true;
-    dom.preloadGlossaryButton.disabled = false;
-    dom.preloadGlossaryButton.classList.add('is-stoppable');
-    setExplanationLoading(true, '正在预加载本篇词义…');
-
-    const requests = [];
-    wordNodes.forEach((node) => {
-      const startOffset = Number(node.dataset.start);
-      const endOffset = Number(node.dataset.end);
-      const cacheKey = explanationCacheKey(essay, startOffset, endOffset);
-      if (explanationCache.has(cacheKey)) return;
-      requests.push({ startOffset, endOffset });
-    });
-
-    let successCount = 0;
-    let failCount = 0;
-    let idx = 0;
-    const total = requests.length;
-    const concurrency = preloadConcurrency(total);
-    let lastProgress = 0;
-    if (total === 0) {
-      dom.preloadGlossaryButton.textContent = '已预加载本篇单词';
-      dom.preloadGlossaryButton.setAttribute('aria-label', '本篇单词词义已全部缓存');
-      dom.preloadGlossaryButton.classList.remove('is-stoppable');
-      isPreloadingGlossary = false;
-      dom.preloadGlossaryButton.disabled = false;
-      setExplanationLoading(false, '当前词义已缓存，可直接悬浮查看。');
-      return;
-    }
-    preloadDoneCount = 0;
-    preloadTotalCount = total;
-    setPreloadButtonProgress(0, total);
-
-    const runWorker = async () => {
-      while (idx < total) {
-        if (token !== preloadRequestId || !isPreloadingGlossary) return;
-        const position = idx++;
-        const target = requests[position];
-        try {
-          await requestExplanation(essay, {
-            kind: 'word',
-            startOffset: target.startOffset,
-            endOffset: target.endOffset
-          }, {
-            timeoutMs: PRELOAD_REQUEST_TIMEOUT_MS
-          });
-          successCount += 1;
-        } catch (error) {
-          if (handleExpiredSession(error)) {
-            return;
-          }
-          failCount += 1;
+    window.clearTimeout(preloadTimer);
+    let cursor = 0;
+    const requestingUser = state.currentUser;
+    const isCurrent = () => token === preloadRequestId && state.currentUser === requestingUser
+      && currentEssay()?.id === essay.id && currentEssay()?.contentVersion === essay.contentVersion;
+    dom.preloadStatus.hidden = false;
+    dom.preloadText.textContent = '正在读取预加载进度…';
+    dom.preloadRetry.hidden = true;
+    async function poll() {
+      try {
+        const progress = await api.getPreload(essay.id, cursor);
+        if (!isCurrent()) return;
+        if (progress.contentVersion !== essay.contentVersion) {
+          dom.preloadText.textContent = '范文已在其他页面更新，请重新打开。';
+          dom.preloadMeter.hidden = true;
+          return;
         }
-        if (token !== preloadRequestId || !isPreloadingGlossary) return;
-        const done = Math.min(successCount + failCount, total);
-        setPreloadButtonProgress(done, total);
-        if (total > 20) {
-          if (done === 1 || done === total || done - lastProgress >= PRELOAD_PROGRESS_STEP) {
-            lastProgress = done;
-            setExplanationLoading(true, `正在预加载本篇单词…${done} / ${total}`);
-          }
+        cursor = progress.cursor;
+        for (const row of progress.results) {
+          if (essay.content.slice(row.startOffset, row.endOffset) !== row.selectedText) continue;
+          explanationCache.set(explanationCacheKey(essay, row.startOffset, row.endOffset), Promise.resolve(row));
+          const node = dom.essayBody.querySelector(`[data-start="${row.startOffset}"][data-end="${row.endOffset}"]`);
+          if (node) { node.dataset.gloss = row.translationZh; node.dataset.ready = 'true'; }
         }
+        const label = previewUtils.preloadStatusText(progress);
+        dom.preloadText.textContent = label;
+        dom.preloadStatus.dataset.state = progress.status;
+        dom.preloadMeter.max = Math.max(1, progress.total);
+        dom.preloadMeter.value = progress.done;
+        dom.preloadMeter.hidden = progress.status === 'complete' || progress.total === 0;
+        dom.preloadRetry.hidden = progress.status !== 'paused';
+        if (progress.status !== 'complete') preloadTimer = window.setTimeout(poll, progress.status === 'paused' ? 15000 : 3000);
+      } catch (error) {
+        if (!isCurrent() || handleExpiredSession(error)) return;
+        dom.preloadText.textContent = '进度暂时无法同步，已保存的释义仍可查看。';
+        preloadTimer = window.setTimeout(poll, 8000);
       }
-    };
+    }
+    void poll();
+  }
 
+  async function retryPreload() {
+    const essay = currentEssay();
+    if (!essay || dom.preloadRetry.disabled) return;
+    dom.preloadRetry.disabled = true;
     try {
-      const workers = Array.from({ length: Math.min(concurrency, Math.max(1, requests.length)) }, runWorker);
-      await Promise.all(workers);
-    } finally {
-      if (token === preloadRequestId) {
-        const wasStopped = preloadStopRequested;
-        preloadStopRequested = false;
-        isPreloadingGlossary = false;
-        dom.preloadGlossaryButton.classList.remove('is-stoppable');
-        if (!wasStopped) {
-          const buttonText = requests.length ? PRELOAD_BUTTON_TEXT : '已预加载本篇单词';
-          dom.preloadGlossaryButton.disabled = false;
-          dom.preloadGlossaryButton.textContent = buttonText;
-          setExplanationLoading(
-            false,
-            requests.length
-              ? (failCount
-                ? `已完成预加载：${successCount} 条成功，${failCount} 条暂时未返回。`
-                : `本篇单词预加载完成（共 ${successCount} 条）。`)
-              : '当前词义已缓存，可直接悬浮查看。'
-          );
-          if (failCount > 0) showToast('部分词汇暂时未能预加载，请稍后再次尝试。');
-        }
-      }
-    }
+      await api.retryPreload(essay.id);
+      if (currentEssay()?.id === essay.id) watchPreload(essay);
+    } catch (error) {
+      if (!handleExpiredSession(error)) showToast(errorMessage(error, '暂时无法重试。'));
+    } finally { dom.preloadRetry.disabled = false; }
   }
-
-  function setPreloadButtonProgress(done, total) {
-    if (!dom.preloadGlossaryButton || !Number.isFinite(total) || total <= 0) {
-      setPreloadButtonIdle();
-      return;
-    }
-    dom.preloadGlossaryButton.classList.add('is-stoppable');
-    dom.preloadGlossaryButton.textContent = `停止 ${done} / ${total}`;
-    dom.preloadGlossaryButton.setAttribute('aria-label', `停止预加载（已完成 ${done} / 共 ${total}）`);
-  }
-
-  function setPreloadButtonIdle() {
-    dom.preloadGlossaryButton.classList.remove('is-stoppable');
-    dom.preloadGlossaryButton.setAttribute('aria-label', '预加载当前范文词义');
-    dom.preloadGlossaryButton.textContent = PRELOAD_BUTTON_TEXT;
-  }
-
-  function stopPreloadingGlossary() {
-    if (!isPreloadingGlossary) return;
-    preloadStopRequested = true;
-    isPreloadingGlossary = false;
-    setPreloadButtonIdle();
-    setExplanationLoading(false, '预加载已停止；已加载的词义保留，再次点击可继续。');
-    showToast(`已停止预加载（完成 ${preloadDoneCount} / ${preloadTotalCount}）；再次点击可从剩余单词继续。`);
-  }
-
   function setExplanationLoading(isLoading, message) {
     dom.explanationStatus.dataset.loading = String(Boolean(isLoading));
     dom.explanationStatusText.textContent = message;
@@ -880,8 +816,8 @@
         false,
         error instanceof ApiError && error.status === 428
           ? '请先在右上角「AI 设置」配置自己的 API Key；仍可手动填写。'
-          : error instanceof ApiError && error.status === 503
-          ? '语境翻译暂不可用；仍可手动填写释义或记忆提示。'
+          : error instanceof ApiError && (error.status === 503 || error.status === 429)
+          ? `${error.message || '语境翻译暂不可用。'} 仍可手动填写释义或记忆提示。`
           : '暂时无法取得语境释义；仍可手动填写释义或记忆提示。'
       );
     }
@@ -1084,7 +1020,13 @@
       selectionData.startOffset,
       selectionData.endOffset
     ));
-    wordNode.dataset.gloss = cachedExplanation ? '正在读取语境释义…' : '正在获取语境释义…';
+    if (!cachedExplanation) {
+      wordNode.dataset.gloss = dom.preloadStatus.dataset.state === 'paused'
+        ? '此词尚未加载，可在上方重试或点击手动记录。' : '正在预加载此词，完成后会自动显示释义。';
+      return;
+    }
+    if (wordNode.dataset.ready === 'true') return;
+    wordNode.dataset.gloss = '正在读取语境释义…';
     hoverTimer = scheduleHoverExplanation({
       cachedExplanation,
       onRun: () => {
@@ -1188,13 +1130,8 @@
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));
     dom.logoutButton.addEventListener('click', () => void logout());
     dom.newEssayButton.addEventListener('click', openEssayDialog);
-    dom.preloadGlossaryButton.addEventListener('click', () => {
-      if (isPreloadingGlossary) {
-        stopPreloadingGlossary();
-        return;
-      }
-      void preloadCurrentEssayExplanations();
-    });
+    document.querySelector('#edit-essay-button').addEventListener('click', openEditEssayDialog);
+    dom.preloadRetry.addEventListener('click', () => void retryPreload());
     document.querySelectorAll('[data-open-new-essay]').forEach((button) => button.addEventListener('click', openEssayDialog));
     document.querySelectorAll('[data-close-dialog]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -1292,7 +1229,7 @@
   const aiSettings = window.AiSettings.init({
     api,
     onUnauthorized: () => showAuthGate('登录状态已失效，请重新登录。'),
-    onChanged: () => { explanationCache.clear(); translationUnavailableUntil = 0; }
+    onChanged: () => { translationUnavailableUntil = 0; if (currentEssay()) void retryPreload(); }
   });
   document.querySelectorAll('[data-site-view]').forEach(button => {
     button.addEventListener('click', () => {

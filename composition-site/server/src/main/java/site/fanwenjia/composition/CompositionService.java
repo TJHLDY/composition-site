@@ -17,17 +17,20 @@ public class CompositionService {
     private final CompositionAnnotationRepository annotationRepository;
     private final UserAccountRepository userAccountRepository;
     private final site.fanwenjia.wordbook.WordbookService wordbookService;
+    private final site.fanwenjia.translation.GlossaryStore glossary;
 
     public CompositionService(
             CompositionRepository compositionRepository,
             CompositionAnnotationRepository annotationRepository,
             UserAccountRepository userAccountRepository,
-            site.fanwenjia.wordbook.WordbookService wordbookService
+            site.fanwenjia.wordbook.WordbookService wordbookService,
+            site.fanwenjia.translation.GlossaryStore glossary
     ) {
         this.compositionRepository = compositionRepository;
         this.annotationRepository = annotationRepository;
         this.userAccountRepository = userAccountRepository;
         this.wordbookService = wordbookService;
+        this.glossary = glossary;
     }
 
     @Transactional
@@ -37,6 +40,7 @@ public class CompositionService {
         String sourceLabel = optionalText(request.sourceLabel(), 100);
         UserAccount owner = userAccountRepository.getReferenceById(currentUser.id());
         Composition composition = compositionRepository.save(new Composition(owner, title, sourceLabel, content));
+        glossary.enqueue(currentUser,composition);
         return toView(composition, List.of());
     }
 
@@ -55,6 +59,48 @@ public class CompositionService {
                         composition.getUpdatedAt()
                 ))
                 .toList();
+    }
+
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public CompositionView update(CurrentUser user, Long id, UpdateCompositionRequest request) {
+        wordbookService.acquireOwnerLock(user);
+        Composition essay = findOwned(user, id);
+        compositionRepository.lockById(id).orElseThrow();
+        if (request.contentVersion() == null || request.contentVersion() != essay.getContentVersion())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "范文已在其他页面更新，请重新打开后再编辑。");
+        String title = requiredText(request.title(), "题目", 200);
+        String content = requiredText(request.content(), "范文", 100_000).replace("\r\n", "\n").replace('\r', '\n');
+        String source = optionalText(request.sourceLabel(), 100);
+        String old = essay.getContent();
+        var notes = annotationRepository.findByCompositionIdAndOwnerIdOrderByStartOffsetAscIdAsc(id, user.id());
+        int prefix = 0, suffix = 0;
+        while (prefix < Math.min(old.length(), content.length()) && old.charAt(prefix) == content.charAt(prefix)) prefix++;
+        while (suffix < Math.min(old.length(), content.length()) - prefix &&
+                old.charAt(old.length()-1-suffix) == content.charAt(content.length()-1-suffix)) suffix++;
+        var positions = new java.util.ArrayList<Integer>();
+        for (var note : notes) {
+            int start;
+            if (note.getEndOffset() <= prefix) start = note.getStartOffset();
+            else if (note.getStartOffset() >= old.length()-suffix) start = note.getStartOffset()+content.length()-old.length();
+            else throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "正文改动涉及已有摘录。请保留摘录所在片段，或先处理对应摘录后再修改；本次未保存，原内容和笔记仍保留。");
+            if ((start > 0 && Character.isLetterOrDigit(content.charAt(start-1))) ||
+                    (start+note.getSelectedText().length() < content.length() && Character.isLetterOrDigit(content.charAt(start+note.getSelectedText().length()))))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "正文改动改变了摘录的单词边界，请先处理对应摘录。");
+            positions.add(start);
+        }
+        // Import old notes before changing their positions or source metadata.
+        wordbookService.prepare(user);
+        essay.edit(title, source, content);
+        for (int i=0; i<notes.size(); i++) notes.get(i).relocate(positions.get(i), essay.getContentVersion());
+        annotationRepository.flush();
+        for (var note : notes) {
+            SelectionContext selection = resolveSelection(user, id, new SelectionRequest(note.getStartOffset(),
+                    note.getEndOffset(), note.getKind(), essay.getContentVersion()));
+            wordbookService.sync(user,id,title,note.getId(),note.getSelectedText(),note.getTranslationZh(),note.getNote(),selection.sentence());
+        }
+        glossary.enqueue(user,essay);
+        return toView(essay, notes.stream().map(this::toAnnotationView).toList());
     }
 
     @Transactional(readOnly = true)
@@ -166,10 +212,12 @@ public class CompositionService {
         composition.touch();
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void deleteComposition(CurrentUser currentUser, Long compositionId) {
         wordbookService.acquireOwnerLock(currentUser);
         Composition composition = findOwned(currentUser, compositionId);
+        compositionRepository.lockById(compositionId).orElseThrow();
+        glossary.delete(compositionId);
         wordbookService.detach(currentUser, compositionId, null);
         annotationRepository.deleteAll(
                 annotationRepository.findByCompositionIdAndOwnerIdOrderByStartOffsetAscIdAsc(compositionId, currentUser.id())
@@ -236,7 +284,7 @@ public class CompositionService {
         return normalized;
     }
 
-    private String sourceSentence(String content, int startOffset, int endOffset) {
+    public static String sourceSentence(String content, int startOffset, int endOffset) {
         int left = Math.max(
                 Math.max(content.lastIndexOf('.', startOffset - 1), content.lastIndexOf('!', startOffset - 1)),
                 Math.max(content.lastIndexOf('?', startOffset - 1), content.lastIndexOf('\n', startOffset - 1))

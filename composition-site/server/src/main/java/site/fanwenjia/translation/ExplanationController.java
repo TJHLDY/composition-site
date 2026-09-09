@@ -14,9 +14,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExplanationController {
 
     private final ExplanationService explanationService;
+    private final GlossaryStore glossary;
+    @org.springframework.web.bind.annotation.GetMapping("/{compositionId}/preload")
+    public GlossaryStore.Progress progress(@AuthenticationPrincipal CurrentUser user,@PathVariable Long compositionId,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue="0") long after) {
+        return glossary.progress(user,compositionId,after);
+    }
+    @PostMapping("/{compositionId}/preload/retry")
+    public void retry(@AuthenticationPrincipal CurrentUser user,@PathVariable Long compositionId) {glossary.retry(user,compositionId);}
+    public record BatchRequest(java.util.List<ExplanationRequest> selections) {}
+    @PostMapping("/{compositionId}/explanations/batch")
+    public java.util.List<ExplanationView> batch(@AuthenticationPrincipal CurrentUser user,
+            @PathVariable Long compositionId,@RequestBody BatchRequest request) {
+        return explanationService.batch(user,compositionId,request.selections());
+    }
 
-    public ExplanationController(ExplanationService explanationService) {
+    public ExplanationController(ExplanationService explanationService,GlossaryStore glossary) {
         this.explanationService = explanationService;
+        this.glossary = glossary;
     }
 
     @PostMapping("/{compositionId}/explanations")

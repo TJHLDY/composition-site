@@ -23,4 +23,11 @@ public class AccountContextualExplainer implements ContextualExplainer {
             return new OpenAiCompatibleContextualExplainer(mapper,c.apiKey,c.provider.baseUrl,c.provider.model(),0,true,true).explain(selection,user,learning);
         } finally { limiter.release(user.id()); }
     }
+    @Override public java.util.List<ContextualExplanation> explainBatch(java.util.List<SelectionContext> selections, CurrentUser user) {
+        var c=settings.require(user);
+        limiter.acquire(user.id());
+        try {
+            return new OpenAiCompatibleContextualExplainer(mapper,c.apiKey,c.provider.baseUrl,c.provider.model(),0,true,true).explainBatch(selections);
+        } finally { limiter.release(user.id()); }
+    }
 }

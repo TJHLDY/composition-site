@@ -121,6 +121,12 @@ public class CompositionAnnotation {
         return id;
     }
 
+    public void relocate(int start, int version) {
+        this.startOffset = start;
+        this.endOffset = start + selectedText.length();
+        this.contentVersion = version;
+    }
+
     public Composition getComposition() {
         return composition;
     }

@@ -98,6 +98,14 @@ public class Composition {
         updatedAt = Instant.now();
     }
 
+    public void edit(String title, String sourceLabel, String content) {
+        this.title = title;
+        this.sourceLabel = sourceLabel;
+        this.content = content;
+        this.contentVersion++;
+        touch();
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

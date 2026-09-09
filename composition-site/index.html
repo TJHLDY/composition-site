@@ -137,6 +137,7 @@
                 <span aria-hidden="true">←</span> 全部作文
               </button>
               <div class="reader-status" id="reader-status">阅读中</div>
+              <button type="button" class="secondary-button" id="edit-essay-button">编辑范文</button>
             </div>
 
             <article class="essay-sheet">
@@ -144,9 +145,6 @@
                 <p class="source-label" id="reader-source-label"></p>
                 <div class="essay-title-row">
                   <h2 id="reader-title"></h2>
-                  <button class="preload-top-button" id="preload-glossary-button" type="button" aria-label="预加载当前范文词义" disabled>
-                    预加载本篇单词
-                  </button>
                 </div>
                 <div class="essay-meta">
                   <span id="reader-date"></span>
@@ -157,6 +155,11 @@
                 </div>
               </header>
 
+              <div class="glossary-progress" id="preload-status" hidden>
+                <span id="preload-text" role="status" aria-live="polite">正在预加载…</span>
+                <progress id="preload-meter" max="1" value="0" aria-label="语境释义预加载进度"></progress>
+                <button id="preload-retry" class="text-link" type="button" hidden>重试未完成部分</button>
+              </div>
               <div class="reader-rule" aria-hidden="true"></div>
               <div class="essay-body" id="essay-body" aria-label="范文正文"></div>
 

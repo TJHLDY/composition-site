@@ -24,7 +24,7 @@ public class WordbookService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
     }
 
-    private void prepare(CurrentUser user) {
+    public void prepare(CurrentUser user) {
         acquireOwnerLock(user);
         if (em.find(WordbookImport.class, user.id()) != null) return;
         List<CompositionAnnotation> notes = em.createQuery("select a from CompositionAnnotation a where a.owner.id=:owner order by a.id", CompositionAnnotation.class)

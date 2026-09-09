@@ -225,7 +225,11 @@
         }
       },
       listCompositions: () => request('/api/compositions'),
+      getPreload: (id, after = 0) => request(`/api/compositions/${encodeURIComponent(id)}/preload?after=${encodeURIComponent(after)}`),
+      retryPreload: (id) => request(`/api/compositions/${encodeURIComponent(id)}/preload/retry`, { method: 'POST' }),
       createComposition: (payload) => request('/api/compositions', { method: 'POST', body: payload }),
+      explainBatch: (id, selections) => request(`/api/compositions/${encodeURIComponent(id)}/explanations/batch`, { method: 'POST', body: { selections }, timeoutMs: 35000 }),
+      updateComposition: (id, payload) => request(`/api/compositions/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }),
       readComposition: (compositionId) => request(`/api/compositions/${encodeURIComponent(compositionId)}`),
       deleteComposition: (compositionId) => request(
         `/api/compositions/${encodeURIComponent(compositionId)}`,

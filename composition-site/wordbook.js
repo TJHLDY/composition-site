@@ -82,6 +82,7 @@
   function coreMeaning(entry) {
     const original = entry.dictionary?.meanings?.[0];
     const translation = entry.translationZh || '';
+    if (entry.id) return translation;
     if (!original) return translation;
     const summary = entry.dictionary.meanings.map(s => s.split(/[；;]/, 1)[0]).join(' · ');
     const generated = [original, original.slice(0, 499) + '…', summary, summary.slice(0, 499) + '…'];
@@ -96,10 +97,22 @@
       ${dictionaryGroups(data).map(group => `<section class="wb-pos-group"><h4 class="wb-pos-label">${escapeHtml(group.label)}<span>${group.senses.length} 个义项</span></h4><ol class="wb-definitions">${group.senses.slice(0, 2).map(meaning).join('')}</ol>${group.senses.length > 2 ? `<details class="wb-more-meanings"><summary>展开 ${escapeHtml(group.label)} 的其余 ${group.senses.length - 2} 个义项</summary><ol class="wb-definitions">${group.senses.slice(2).map((v, i) => meaning(v, i + 2)).join('')}</ol></details>` : ''}</section>`).join('')}
       ${data.wordForms?.length ? `<h4 class="wb-saved-heading">词形变化</h4><dl class="wb-word-forms">${data.wordForms.map(f => `<div><dt>${escapeHtml(f.name)}</dt><dd lang="en">${escapeHtml(f.value)}</dd></div>`).join('')}</dl>` : ''}</section>`;
   }
+
+  function dictionarySelectionMarkup(data, translation = '') {
+    if (!data?.meanings?.length) return '';
+    const chosen = new Set(translation.split('\n').map(s => s.trim()));
+    return `<section class="wb-meaning-picker"><h3>选择要记的释义</h3><p class="wb-small">可多选，选中后会填入上方释义；也可以继续手动修改。</p>${dictionaryGroups(data).map(group =>
+      `<fieldset><legend>${escapeHtml(group.label)}</legend>${group.senses.map(sense => {
+        const value = `${group.label} ${sense}`;
+        return `<label class="wb-meaning-option"><input type="checkbox" data-meaning-choice value="${escapeHtml(value)}" ${chosen.has(value) ? 'checked' : ''}/><span>${escapeHtml(sense)}</span></label>`;
+      }).join('')}</fieldset>`).join('')}</section>`;
+  }
   const aiFailureMessage = error => error?.status === 428
     ? '请在右上角「AI 设置」填写自己的 API Key。基础查词和单词本仍可使用。'
     : error?.status === 429
     ? '查询较频繁，请稍后重试。你仍可以手动填写并收录。'
+    : error?.status === 503 && error?.message
+    ? error.message
     : 'AI 暂时无法完成查询，请重试。你仍可以手动填写并收录。';
   function lookupFailureMarkup(message) {
     return `<div class="wb-welcome"><h2>暂时查不到？先记下来。</h2><p>可以重试查询，也可以自己填写释义和备注。</p><div class="wb-term-actions"><button type="button" class="secondary-button" data-action="lookup">重新查询</button><button type="button" class="primary-button" data-action="add">手动收录</button></div><p class="wb-status" data-error="true" role="alert">${escapeHtml(message)}</p></div>`;
@@ -252,6 +265,10 @@
       const entry = selected || preview;
       if (!entry) { emptyDetail(); return; }
       const saved = Boolean(selected);
+      if (entry.kind === 'sentence') {
+        detail.innerHTML = `<header class="wb-term-header"><span class="wb-kind-label">完整句子翻译</span><p id="wb-translated-sentence" class="wb-quotation" lang="en">${escapeHtml(entry.term)}</p>${textBlock(entry.translationZh,'wb-muted')}<button type="button" class="secondary-button" data-action="copy-translation">复制英文译文</button></header><section class="wb-section"><h3>从译文中摘录</h3><p class="wb-small">在上方译文中选中单词或短语，再点击收录。也可在这里填写要摘录的表达。</p><input id="wb-extracted-term" maxlength="200" aria-label="要收录的单词或短语"/><button type="button" class="primary-button" data-action="collect-extract">收录选中表达</button></section><p id="wb-detail-status" class="wb-status" role="status"></p>`;
+        return;
+      }
       detail.innerHTML = `<div class="wb-detail-top"><p class="eyebrow">${saved ? 'FROM YOUR COLLECTION' : 'DISCOVER AN EXPRESSION'}</p><span class="wb-tag">${saved ? '已收录' : '查询结果 · 尚未收录'}</span></div>
         <header class="wb-term-header"><span class="wb-kind-label">${kindLabel(entry.kind)}</span><h2 lang="en">${escapeHtml(entry.term)}</h2>${textBlock(coreMeaning(entry) || '尚未填写释义', 'wb-core-meaning')}
         <div class="wb-term-actions">${saved ? '<button type="button" class="secondary-button" data-action="edit">编辑释义与备注</button><button type="button" class="wb-delete-link" data-action="delete">删除词条</button>' : '<button type="button" class="primary-button" data-action="collect">＋ 收录到单词本</button><span class="wb-small">确认后才会加入个人词库</span>'}</div></header>
@@ -333,7 +350,6 @@
       dialogScope.reset();
       editingId = isEdit ? entry.id : null;
       editorDictionary = entry?.dictionary || null;
-      $('#wb-editor-dictionary').innerHTML = dictionaryMarkup(editorDictionary);
       editorForm.reset();
       $('#wb-editor-title').textContent = isEdit ? '编辑词条' : '收录词条';
       $('#wb-save').textContent = isEdit ? '保存修改' : '收录到单词本';
@@ -342,6 +358,7 @@
       $('#wb-term').value = entry?.term || '';
       $('#wb-term').readOnly = isEdit;
       $('#wb-translation').value = entry?.translationZh || '';
+      $('#wb-editor-dictionary').innerHTML = dictionarySelectionMarkup(editorDictionary, $('#wb-translation').value);
       $('#wb-note').value = entry?.note || '';
       $('#wb-fill-query').value = entry?.term || query.value.trim();
       $('#wb-editor-status').textContent = '';
@@ -361,6 +378,10 @@
       try {
         const result = await api.lookupWordbook({ query: fillQuery });
         if (!current() || !active || !editor.open) return;
+        if (result.kind === 'sentence') {
+          $('#wb-editor-status').textContent = '这是完整句子，请在主搜索框查询后，从译文中选取单词或短语收录。';
+          return;
+        }
         const values = [result.term, result.translationZh, result.memoryHint];
         if ($('#wb-fill-query').value.trim() !== fillQuery || $('#wb-term').value !== before[0]) {
           $('#wb-editor-status').textContent = '查询内容已改变，请重新查询。';
@@ -368,7 +389,7 @@
         }
         fields.forEach((id, i) => { if (!before[i].trim() && !$(id).value.trim()) $(id).value = values[i] || ''; });
         if ($('#wb-term').value.trim().toLowerCase() === result.term.toLowerCase()) editorDictionary = result.dictionary || null;
-        $('#wb-editor-dictionary').innerHTML = dictionaryMarkup(editorDictionary);
+        $('#wb-editor-dictionary').innerHTML = dictionarySelectionMarkup(editorDictionary, $('#wb-translation').value);
         $('#wb-editor-status').textContent = '已补充空白项，请检查后收录。';
       } catch (error) { if (current()) report(error, $('#wb-editor-status'), true); }
       finally { if (current()) $('#wb-fill-button').disabled = false; }
@@ -517,6 +538,22 @@
     $('#wb-prev').addEventListener('click', () => { search.cancel(); page = Math.max(0, page - 1); void loadList(); });
     $('#wb-next').addEventListener('click', () => { search.cancel(); page += 1; void loadList(); });
     editorForm.addEventListener('submit', event => void saveEditor(event));
+    $('#wb-editor-dictionary').addEventListener('change', event => {
+      if (!event.target.matches('[data-meaning-choice]')) return;
+      const choices = [...$('#wb-editor-dictionary').querySelectorAll('[data-meaning-choice]:checked')];
+      const value = choices.map(input => input.value).join('\n');
+      if (value.length > 1000) {
+        event.target.checked = false;
+        $('#wb-editor-status').textContent = '所选释义超过 1000 字，请减少选择或手动精简。';
+        return;
+      }
+      $('#wb-translation').value = value;
+      $('#wb-editor-status').textContent = choices.length ? `已选择 ${choices.length} 个义项，确认后即可收录。` : '已取消选择，可以重新选择或手动填写。';
+    });
+    $('#wb-translation').addEventListener('input', () => {
+      const lines = new Set($('#wb-translation').value.split('\n').map(s => s.trim()));
+      $('#wb-editor-dictionary').querySelectorAll('[data-meaning-choice]').forEach(input => { input.checked = lines.has(input.value); });
+    });
     $('#wb-fill-button').addEventListener('click', () => void fillEditor());
     $('#wb-fill-query').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.isComposing && event.keyCode !== 229) void fillEditor(); } });
     $('#wb-fill-query').addEventListener('input', () => { dialogScope.start('fill'); $('#wb-fill-button').disabled = false; $('#wb-editor-status').textContent = ''; });
@@ -534,7 +571,27 @@
       button.textContent = count ? `收录选中搭配（${count}）` : '收录选中搭配';
     });
 
+    function captureTranslatedSelection() {
+      const paragraph=$('#wb-translated-sentence'), input=$('#wb-extracted-term');
+      const selection=window.getSelection();
+      if(paragraph && input && selection?.rangeCount && paragraph.contains(selection.anchorNode) && paragraph.contains(selection.focusNode)) input.value=selection.toString().trim();
+    }
+    root.addEventListener('mouseup', captureTranslatedSelection);
+    root.addEventListener('keyup', captureTranslatedSelection);
     root.addEventListener('click', event => {
+      const translationAction = event.target.closest('[data-action]')?.dataset.action;
+      if (translationAction === 'copy-translation') {
+        navigator.clipboard.writeText(preview.term).then(() => { const message=$('#wb-detail-status'); if(message) message.textContent='译文已复制。'; })
+          .catch(() => { const message=$('#wb-detail-status'); if(message) message.textContent='复制失败，请选中译文手动复制。'; });
+        return;
+      }
+      if (translationAction === 'collect-extract') {
+        const term=$('#wb-extracted-term').value.trim();
+        if(!/^[A-Za-z][A-Za-z '\u2019-]*$/.test(term) || term.length>200 || !preview.term.toLowerCase().includes(term.toLowerCase()) || term===preview.term.replace(/[.!?]+$/, '')) {
+          $('#wb-detail-status').textContent='请从译文中选择一个单词或短语，不要选择整句。'; return;
+        }
+        openEditor({term,translationZh:'',note:''}); return;
+      }
       const button = event.target.closest('button');
       if (!button || button.disabled || !active) return;
       if (button.dataset.entry) { void openEntry(button.dataset.entry); return; }
@@ -649,5 +706,5 @@
     };
   }
 
-  return { init, createRequestScope, createSearchController, lookupFailureMarkup, dictionaryMarkup, dictionaryGroups, coreMeaning };
+  return { init, createRequestScope, createSearchController, lookupFailureMarkup, aiFailureMessage, dictionaryMarkup, dictionarySelectionMarkup, dictionaryGroups, coreMeaning };
 });

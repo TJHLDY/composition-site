@@ -28,3 +28,7 @@
 /composition-site/server/mail-local.txt
 /composition-site/scripts/*.out
 /composition-site/scripts/*.err
+
+# SSH tools
+/plink.exe
+/pscp.exe

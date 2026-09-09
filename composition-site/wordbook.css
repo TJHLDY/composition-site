@@ -175,6 +175,15 @@
 .wb-pos-label span { font-size: 12px; font-weight: normal; color: #74796f; }
 
 /* Desktop panels fit the viewport; long entries scroll without moving navigation. */
+.wb-meaning-picker { margin-top: 22px; }
+.wb-meaning-picker h3 { color: var(--moss); font-size: 1rem; margin-bottom: 8px; }
+.wb-meaning-picker fieldset { min-width: 0; margin: 16px 0; padding: 0; border: 0; }
+.wb-meaning-picker legend { margin-bottom: 8px; color: var(--moss); font-weight: 700; }
+.wb-meaning-option { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 3px; cursor: pointer; font-size: .83rem; line-height: 1.7; }
+.wb-meaning-option input { flex: none; width: 17px; height: 17px; margin: 3px 0 0; accent-color: var(--moss); }
+.wb-meaning-option span { min-width: 0; overflow-wrap: anywhere; }
+.wb-meaning-option:has(input:checked) { border-color: var(--moss); background: rgba(33,77,61,.08); color: var(--moss); }
+.wb-meaning-option:focus-within { outline: 2px solid var(--sun); outline-offset: 2px; }
 @media (min-width: 901px) {
   body { display: flow-root; }
   .app-frame {

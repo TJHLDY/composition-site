@@ -17,11 +17,9 @@ import site.fanwenjia.auth.VerificationPurpose;
 import site.fanwenjia.composition.CompositionService;
 import site.fanwenjia.composition.CompositionView;
 import site.fanwenjia.composition.CreateCompositionRequest;
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.concurrent.ConcurrentMap;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -44,6 +42,8 @@ class ExplanationServiceTest {
 
     @Autowired
     private ExplanationService explanationService;
+    @Autowired private GlossaryStore glossaryStore;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
 
     @Autowired
     private VerificationCodeStore verificationCodeStore;
@@ -119,7 +119,7 @@ class ExplanationServiceTest {
     }
 
     @Test
-    void boundsTheInMemoryExplanationCacheWhileServingManyDistinctSelections() throws Exception {
+    void persistsAllSelectionsBeyondTheOldMemoryLimitAndReadsWithANewServiceWithoutAi() {
         CurrentUser reader = register("cache-bound@example.com", "Cache Bound");
         String content = String.join(" ", Collections.nCopies(520, "a"));
         CompositionView composition = compositionService.create(
@@ -141,7 +141,13 @@ class ExplanationServiceTest {
             );
         }
 
-        assertThat(cachedExplanationCount()).isLessThanOrEqualTo(512);
+        entityManager.flush();entityManager.clear();
+        var progress=glossaryStore.progress(reader,composition.id(),0);
+        assertThat(progress.results()).hasSize(520);
+        when(contextualExplainer.isConfigured(any(CurrentUser.class))).thenReturn(false);
+        var restarted=new ExplanationService(compositionService,contextualExplainer,glossaryStore);
+        assertThat(restarted.explain(reader,composition.id(),new ExplanationRequest(0,1,"word",1)).translationZh()).isEqualTo("甲");
+        verify(contextualExplainer,times(520)).explain(any(),eq(reader),eq(false));
     }
 
     @Test
@@ -167,9 +173,4 @@ class ExplanationServiceTest {
         return new CurrentUser(result.user().id(), result.user().email(), result.user().displayName());
     }
 
-    private int cachedExplanationCount() throws Exception {
-        Field cacheField = ExplanationService.class.getDeclaredField("cache");
-        cacheField.setAccessible(true);
-        return ((ConcurrentMap<?, ?>) cacheField.get(explanationService)).size();
-    }
 }

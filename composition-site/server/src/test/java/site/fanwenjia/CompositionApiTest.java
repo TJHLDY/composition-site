@@ -44,6 +44,35 @@ class CompositionApiTest {
     private VerificationCodeStore verificationCodeStore;
 
     @Test
+    void editsPreserveNotesAndRejectConflictsAndOtherUsers() throws Exception {
+        String token = register("editor@example.com", "Editor");
+        var created = mockMvc.perform(post("/api/compositions").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Original\",\"content\":\"A meaningful contribution matters.\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        long id = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+        mockMvc.perform(post("/api/compositions/"+id+"/annotations").header("Authorization","Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"startOffset\":2,\"endOffset\":12,\"kind\":\"word\",\"translationZh\":\"有意义的\",\"contentVersion\":1}"))
+                .andExpect(status().isCreated());
+        String updated="Today. A meaningful contribution matters.";
+        String payload=objectMapper.writeValueAsString(Map.of("title","Edited","sourceLabel","Source","content",updated,"contentVersion",1));
+        String other=register("other-editor@example.com","Other");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/compositions/"+id)
+                .header("Authorization","Bearer "+other).contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isNotFound());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/compositions/"+id)
+                .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Edited"))
+                .andExpect(jsonPath("$.annotations[0].startOffset").value(9)).andExpect(jsonPath("$.contentVersion").value(2));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/compositions/"+id)
+                .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isConflict());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/compositions/"+id)
+                .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("title","Bad edit","content","Completely different.","contentVersion",2))))
+                .andExpect(status().isConflict());
+        mockMvc.perform(get("/api/compositions/"+id).header("Authorization","Bearer "+token))
+                .andExpect(jsonPath("$.content").value(updated)).andExpect(jsonPath("$.annotations[0].translationZh").value("有意义的"));
+    }
+
+    @Test
     void savesAndReadsLongMultilingualContentWithoutTruncation() throws Exception {
         String token = register("long-essay@example.com", "Reader");
         String content = "Learning English matters. 学习与记录。\n".repeat(2500);
