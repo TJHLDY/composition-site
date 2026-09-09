@@ -1,0 +1,19 @@
+[Unit]
+Description=Xieyi Notebook (Spring Boot)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/xieyi-notebook
+EnvironmentFile=/opt/xieyi-notebook/app.env
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -jar /opt/xieyi-notebook/app.jar
+Restart=always
+RestartSec=10
+SuccessExitStatus=143
+StandardOutput=append:/opt/xieyi-notebook/app.log
+StandardError=append:/opt/xieyi-notebook/app.log
+
+[Install]
+WantedBy=multi-user.target

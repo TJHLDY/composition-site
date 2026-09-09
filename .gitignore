@@ -32,3 +32,12 @@
 # SSH tools
 /plink.exe
 /pscp.exe
+
+# Deploy secrets
+/deploy/app.env
+
+# One-off test scripts with credentials
+/deploy/test-mail.sh
+/deploy/test-smtp.py
+/deploy/test-translate.sh
+/deploy/verify.sh
