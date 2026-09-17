@@ -74,7 +74,8 @@ test('mobile onboarding uses one safe-area-aware spotlight layer with five visib
   assert.match(onboarding, /onboarding-target-ring/);
   assert.match(onboarding, /blockOutsideGuide/);
   assert.match(onboarding, /document\.addEventListener\('click', blockOutsideGuide, true\)/);
-  assert.match(onboardingStyles, /bottom:\s*max\(12px,\s*env\(safe-area-inset-bottom\)\)/);
+  assert.match(onboardingStyles, /bottom:\s*var\(--onboarding-card-bottom,\s*max\(12px,\s*env\(safe-area-inset-bottom\)\)\)/);
+  assert.match(onboardingStyles, /--onboarding-card-bottom/);
   assert.match(onboardingStyles, /z-index:\s*(?:[4-9]\d|[1-9]\d{2,})/);
   assert.match(onboardingStyles, /min-width:\s*44px/);
   assert.match(onboardingStyles, /min-height:\s*44px/);

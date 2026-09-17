@@ -184,23 +184,37 @@
       activeTarget = null;
       ring.hidden = true;
       ring.removeAttribute('style');
+      layer.removeAttribute('data-card-position');
+      layer.style.removeProperty('--onboarding-card-bottom');
       moveLayerToTargetContext(null);
     }
 
     function positionCardForViewport() {
       const visualViewport = window.visualViewport;
       const focused = document.activeElement;
+      const targetRect = activeTarget?.isConnected ? activeTarget.getBoundingClientRect() : null;
+      const viewportHeight = visualViewport?.height || window.innerHeight;
       const keyboardOpen = Boolean(
         visualViewport && focused && activeTarget && activeTarget.contains(focused)
         && visualViewport.height < window.innerHeight - 120
       );
       layer.dataset.keyboardOpen = String(keyboardOpen);
-      if (!keyboardOpen || !visualViewport) {
-        layer.style.removeProperty('--onboarding-keyboard-offset');
+      if (keyboardOpen && visualViewport) {
+        layer.removeAttribute('data-card-position');
+        layer.style.removeProperty('--onboarding-card-bottom');
+        const offset = Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
+        layer.style.setProperty('--onboarding-keyboard-offset', `${Math.ceil(offset)}px`);
         return;
       }
-      const offset = Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
-      layer.style.setProperty('--onboarding-keyboard-offset', `${Math.ceil(offset)}px`);
+      layer.style.removeProperty('--onboarding-keyboard-offset');
+      if (!targetRect || targetRect.top < viewportHeight * .56) {
+        layer.removeAttribute('data-card-position');
+        layer.style.removeProperty('--onboarding-card-bottom');
+        return;
+      }
+      const bottomOffset = Math.max(12, window.innerHeight - targetRect.top + 14);
+      layer.setAttribute('data-card-position', 'above-target');
+      layer.style.setProperty('--onboarding-card-bottom', `${Math.ceil(bottomOffset)}px`);
     }
 
     function positionTarget() {
@@ -326,7 +340,11 @@
     }
 
     function start(view = {}, settings = {}) {
-      state = createGuideState(view, { mode: settings.mode });
+      const initialView = settings.resetResources
+        ? { ...view, tutorialWordbookId: null, tutorialCompositionId: null }
+        : view;
+      state = createGuideState(initialView, { mode: settings.mode });
+      if (STEPS.includes(settings.step)) state = { ...state, step: settings.step };
       instruction = settings.instruction || {};
       active = true;
       layer.hidden = false;

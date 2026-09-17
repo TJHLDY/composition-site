@@ -4,7 +4,8 @@
   const previewUtils = window.CompositionPreviewUtils;
   const apiModule = window.CompositionApiClient;
   const passwordVisibilityModule = window.PasswordVisibility;
-  if (!previewUtils || !apiModule || !passwordVisibilityModule) {
+  const onboardingModule = window.VocabNoteOnboarding;
+  if (!previewUtils || !apiModule || !passwordVisibilityModule || !onboardingModule) {
     console.error('VocabNote 没有加载完整，请刷新页面后重试。');
     return;
   }
@@ -13,6 +14,7 @@
     getEnglishPhraseCandidate,
     getMobileWordActionState,
     isEnglishPhraseSelection,
+    preloadNeedsAiSetup,
     scheduleHoverExplanation,
     splitEssayIntoRenderChunks,
     sortEssaysByRecent
@@ -47,11 +49,14 @@
     authFormError: document.querySelector('#auth-form-error'),
     accountDisplayName: document.querySelector('#account-display-name'),
     logoutButton: document.querySelector('#logout-button'),
+    learningGuideButton: document.querySelector('#learning-guide-button'),
     mobileMenuButton: document.querySelector('#mobile-menu-button'),
     mobileMenuDialog: document.querySelector('#mobile-menu-dialog'),
     mobileMenuClose: document.querySelector('#mobile-menu-close'),
     mobileAccountDisplayName: document.querySelector('#mobile-account-display-name'),
     mobileAiSettingsButton: document.querySelector('#mobile-ai-settings-button'),
+    mobileLearningGuideButton: document.querySelector('#mobile-learning-guide-button'),
+    mobileAiGuideButton: document.querySelector('#mobile-ai-guide-button'),
     mobileLogoutButton: document.querySelector('#mobile-logout-button'),
     workspace: document.querySelector('#workspace'),
     newEssayButton: document.querySelector('#new-essay-button'),
@@ -138,6 +143,16 @@
   let notesCollapsed = false;
   let sendCodeTimer = null;
   let sendCodeSecondsLeft = 0;
+  let onboardingView = null;
+  let onboardingRequestId = 0;
+  let coreProgressBusy = false;
+  let aiRequirementPromise = null;
+  let aiRequirementRequestId = 0;
+  let pendingAiRetry = null;
+  let preloadAiResume = null;
+  let temporaryAiGuide = false;
+  let latestPreloadProgress = null;
+  let activePreloadAiKey = null;
 
   function normalizeAnnotation(annotation) {
     return {
@@ -547,6 +562,17 @@
 
   function showAuthGate(message = '') {
     aiSettings.reset();
+    onboarding.close();
+    onboardingView = null;
+    onboardingRequestId += 1;
+    aiRequirementRequestId += 1;
+    aiRequirementPromise = null;
+    coreProgressBusy = false;
+    pendingAiRetry = null;
+    preloadAiResume = null;
+    temporaryAiGuide = false;
+    latestPreloadProgress = null;
+    activePreloadAiKey = null;
     ++listRequestId;
     ++detailRequestId;
     wordbook.reset();
@@ -580,6 +606,7 @@
     renderAll();
     wordbook.reset();
     switchView('wordbook');
+    void startAutomaticOnboarding();
   }
 
   function switchView(view, compositionId = null) {
@@ -618,6 +645,354 @@
       return true;
     }
     return false;
+  }
+
+  const ONBOARDING_SAMPLE_ESSAY = Object.freeze({
+    title: 'Exploring the Universe',
+    sourceLabel: 'VocabNote 示例 · 可修改',
+    content: 'Exploring the universe helps us understand our place in the world. Each new discovery invites us to ask better questions and keep learning with curiosity.'
+  });
+
+  function emitOnboardingEvent(name, detail = {}) {
+    document.dispatchEvent(new CustomEvent(name, { detail }));
+  }
+
+  function activeGuideState() {
+    return onboarding.isActive() ? onboarding.getState() : null;
+  }
+
+  function guideAt(step) {
+    return activeGuideState()?.step === step;
+  }
+
+  function guideInstruction(step) {
+    if (step === 'wordbook') {
+      return {
+        eyebrow: '第 1 步 · 收下一条表达',
+        title: '先查一个真正想记住的词',
+        copy: '搜索框里已经放入 explore。你可以直接查它，也可以改成自己的单词；按回车后再选择一个释义。'
+      };
+    }
+    if (step === 'composition') {
+      return {
+        eyebrow: '第 2 步 · 留下一篇范文',
+        title: '让单词回到语境里',
+        copy: '点击加号，保存一篇范文。示例题目和内容都可以改成你的材料。'
+      };
+    }
+    if (step === 'preload') {
+      return {
+        eyebrow: '第 3 步 · 准备阅读',
+        title: '正在预加载语境释义',
+        copy: '范文已保存，词义会自动写入这篇范文。若需要 AI 配置，会在这里继续指引你。'
+      };
+    }
+    return {
+      eyebrow: '第 4 步 · 留下自己的理解',
+      title: '点一个已准备好的单词',
+      copy: '打开单词卡，补充释义或记忆提示，再保存到本篇笔记。'
+    };
+  }
+
+  function aiGuideInstruction() {
+    return {
+      eyebrow: 'AI 配置 · 完成后继续',
+      title: '先测试，再保存',
+      copy: '选择服务商并填写 API Key，先点击“测试连接”。测试成功后，才能保存并继续刚才的操作。'
+    };
+  }
+
+  function markOnboardingCloseControls(selector, allowed) {
+    document.querySelectorAll(selector).forEach(control => onboarding.setSystemClose(control, allowed));
+  }
+
+  function startWordbookGuideStage() {
+    const guide = activeGuideState();
+    if (!guide || guide.step !== 'wordbook') return;
+    if (guide.mode === 'auto' && guide.wordbookId) {
+      onboarding.showInstruction({
+        eyebrow: '继续上次的教程',
+        title: '之前收录的内容还在',
+        copy: '继续使用它，就不会重复创建一条新的词条。'
+      }, null);
+      return;
+    }
+    wordbook.beginGuidedSearch('explore');
+    onboarding.showInstruction(guideInstruction('wordbook'), '#wb-search-form');
+  }
+
+  function startCompositionGuideStage() {
+    const guide = activeGuideState();
+    if (!guide || guide.step !== 'composition') return;
+    if (guide.mode === 'auto' && guide.compositionId) {
+      onboarding.showInstruction({
+        eyebrow: '继续上次的教程',
+        title: '之前保存的范文还在',
+        copy: '继续使用这篇范文，预加载会从已有内容接着完成。'
+      }, null);
+      return;
+    }
+    onboarding.showInstruction(guideInstruction('composition'), '#new-essay-button');
+  }
+
+  function startPreloadGuideStage() {
+    if (!guideAt('preload')) return;
+    onboarding.showInstruction(guideInstruction('preload'), '#preload-status');
+  }
+
+  function startAnnotationGuideStage(target) {
+    if (!guideAt('annotation')) return;
+    onboarding.showInstruction(guideInstruction('annotation'), target || '.essay-word[data-ready="true"]');
+  }
+
+  function startCoreGuide(view, mode = 'auto') {
+    temporaryAiGuide = false;
+    onboardingView = view;
+    switchView('wordbook');
+    onboarding.start(view, {
+      mode,
+      resetResources: mode === 'manual',
+      instruction: guideInstruction('wordbook'),
+      target: mode === 'auto' && view.tutorialWordbookId ? null : '#wb-search-form'
+    });
+    startWordbookGuideStage();
+  }
+
+  async function startAutomaticOnboarding() {
+    const requestId = ++onboardingRequestId;
+    try {
+      const view = await api.getOnboarding();
+      if (requestId !== onboardingRequestId || !state.currentUser) return;
+      onboardingView = view;
+      if (!onboardingModule.shouldAutoStart(view)) return;
+      const started = await api.startOnboarding();
+      if (requestId !== onboardingRequestId || !state.currentUser) return;
+      startCoreGuide(started, 'auto');
+    } catch (error) {
+      if (!handleExpiredSession(error)) console.warn('Unable to load onboarding state.', error);
+    }
+  }
+
+  async function startManualCoreGuide() {
+    if (!state.currentUser) return;
+    try {
+      const view = await api.getOnboarding();
+      onboardingView = view;
+      startCoreGuide(view, 'manual');
+    } catch (error) {
+      if (!handleExpiredSession(error)) showToast(errorMessage(error, '暂时无法打开新手教程。'));
+    }
+  }
+
+  function once(callback) {
+    let used = false;
+    return async () => {
+      if (used || typeof callback !== 'function') return;
+      used = true;
+      return callback();
+    };
+  }
+
+  async function openAiSettings({ tutorial = false, resume = null } = {}) {
+    const guideBeforeOpen = activeGuideState();
+    const coreGuide = Boolean(guideBeforeOpen && !temporaryAiGuide);
+    const resumeOnce = resume ? once(resume) : null;
+    if (resumeOnce) pendingAiRetry = resumeOnce;
+    const opened = await aiSettings.open({
+      tutorial,
+      onSaved: async () => {
+        const retry = pendingAiRetry;
+        pendingAiRetry = null;
+        preloadAiResume = null;
+        activePreloadAiKey = null;
+        markOnboardingCloseControls('#ai-settings-close', false);
+        if (retry) await retry();
+        if (!tutorial || !onboarding.isActive()) return;
+        if (coreGuide) {
+          const current = activeGuideState();
+          if (current?.step === 'wordbook') startWordbookGuideStage();
+          else if (current?.step === 'composition') startCompositionGuideStage();
+          else if (current?.step === 'preload') startPreloadGuideStage();
+          else if (current?.step === 'annotation') startAnnotationGuideStage();
+        } else {
+          onboarding.showCompletionTip({
+            eyebrow: 'AI 配置完成',
+            title: '已经可以继续学习',
+            copy: '之后需要 AI 功能时，会直接使用这份配置。'
+          });
+          temporaryAiGuide = false;
+        }
+      },
+      onClose: () => {
+        pendingAiRetry = null;
+        preloadAiResume = null;
+        temporaryAiGuide = false;
+        activePreloadAiKey = null;
+        markOnboardingCloseControls('#ai-settings-close', false);
+        if (onboarding.isActive()) onboarding.close();
+      }
+    });
+    if (!opened || !tutorial) return opened;
+    if (coreGuide) onboarding.showInstruction(aiGuideInstruction(), '#ai-settings-form');
+    else {
+      temporaryAiGuide = true;
+      onboarding.start({}, {
+        mode: 'manual',
+        resetResources: true,
+        step: 'preload',
+        instruction: aiGuideInstruction(),
+        target: '#ai-settings-form'
+      });
+    }
+    onboarding.setSystemClose('#ai-settings-close', true);
+    return true;
+  }
+
+  async function requireAi(detail = {}) {
+    if (!state.currentUser) return false;
+    if (detail.forceOpen) return openAiSettings({ tutorial: false, resume: detail.resume });
+    if (aiRequirementPromise) return aiRequirementPromise;
+    const requestId = ++aiRequirementRequestId;
+    const requestingUser = state.currentUser;
+    const guide = activeGuideState();
+    const forceTutorial = Boolean(detail.forceTutorial || guide?.mode === 'auto' && guide.step === 'preload');
+    aiRequirementPromise = (async () => {
+      try {
+        const claim = await api.claimAiGuide();
+        if (requestId !== aiRequirementRequestId || state.currentUser !== requestingUser) return false;
+        if (claim.show) return openAiSettings({ tutorial: true, resume: detail.resume });
+        if (forceTutorial) return openAiSettings({ tutorial: true, resume: detail.resume });
+        detail.showDirectAction?.();
+        return false;
+      } catch (error) {
+        if (handleExpiredSession(error)) return false;
+        detail.showDirectAction?.();
+        return false;
+      }
+    })();
+    try {
+      return await aiRequirementPromise;
+    } finally {
+      if (requestId === aiRequirementRequestId) aiRequirementPromise = null;
+    }
+  }
+
+  function showAiSettingsAction(container, resume) {
+    if (!container || container.querySelector('[data-ai-settings-direct]')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'text-link ai-settings-direct';
+    button.dataset.aiSettingsDirect = 'true';
+    button.textContent = '打开 AI 设置';
+    button.addEventListener('click', () => void openAiSettings({ tutorial: false, resume }));
+    container.append(document.createTextNode(' '), button);
+  }
+
+  async function advanceCoreGuide(type, detail = {}) {
+    const guide = activeGuideState();
+    if (!guide || coreProgressBusy) return;
+    if (type === 'wordbook' && (guide.step !== 'wordbook' || detail.editing || !detail.entryId)) return;
+    if (type === 'composition' && (guide.step !== 'composition' || detail.editing || !detail.compositionId)) return;
+    if (type === 'preload' && (guide.step !== 'preload' || String(guide.compositionId) !== String(detail.compositionId))) return;
+    if (type === 'annotation' && (guide.step !== 'annotation' || detail.kind !== 'word' || !detail.annotationId)) return;
+
+    coreProgressBusy = true;
+    try {
+      if (guide.mode === 'auto') {
+        onboarding.setStatus('正在确认教程进度…');
+        if (type === 'wordbook') onboardingView = await api.recordOnboardingWordbook(detail.entryId);
+        if (type === 'composition') onboardingView = await api.recordOnboardingComposition(detail.compositionId);
+        if (type === 'annotation') onboardingView = await api.completeOnboarding(detail.annotationId);
+      }
+
+      if (type === 'wordbook') {
+        onboarding.dispatch({ type: 'wordbook-saved', entryId: detail.entryId });
+        switchView('compositions');
+        startCompositionGuideStage();
+      }
+      if (type === 'composition') {
+        onboarding.dispatch({ type: 'composition-saved', compositionId: detail.compositionId });
+        startPreloadGuideStage();
+        window.setTimeout(() => replayLatestPreloadProgress(), 0);
+      }
+      if (type === 'preload') {
+        onboarding.dispatch({ type: 'preload-ready', compositionId: detail.compositionId });
+        startAnnotationGuideStage(detail.target);
+      }
+      if (type === 'annotation') {
+        onboarding.dispatch({ type: 'annotation-saved', annotationId: detail.annotationId }, { target: null });
+        onboarding.showCompletionTip();
+      }
+    } catch (error) {
+      if (!handleExpiredSession(error)) onboarding.setStatus(errorMessage(error, '教程进度暂时无法同步，请稍后再试。'));
+    } finally {
+      coreProgressBusy = false;
+    }
+  }
+
+  function handleGuideAction(action, guide) {
+    if (!guide) return;
+    if (action === 'resume-wordbook' && guide.wordbookId) {
+      onboarding.dispatch({ type: 'resume-saved-wordbook' });
+      switchView('compositions');
+      startCompositionGuideStage();
+      showToast('已继续使用之前收录的词条。');
+      return;
+    }
+    if (action === 'resume-composition' && guide.compositionId) {
+      onboarding.dispatch({ type: 'resume-saved-composition' });
+      switchView('compositions', guide.compositionId);
+      startPreloadGuideStage();
+      showToast('已继续使用之前保存的范文。');
+    }
+  }
+
+  function wireOnboardingEvents() {
+    document.addEventListener('vocabnote:wordbook-preview-ready', () => {
+      const guide = activeGuideState();
+      if (!guide || guide.step !== 'wordbook' || guide.wordbookId) return;
+      onboarding.showInstruction({
+        eyebrow: '第 1 步 · 选择要记的意思',
+        title: '先打开收录页',
+        copy: '这是一条真实的查询结果。点击“收录到单词本”，再从词典义项里选择一个最适合的解释。'
+      }, '#wordbook-view [data-action="collect"]');
+    });
+    document.addEventListener('vocabnote:wordbook-editor-opened', (event) => {
+      const guide = activeGuideState();
+      if (!guide || guide.step !== 'wordbook' || event.detail?.editing) return;
+      markOnboardingCloseControls('#wb-editor [data-wb-close]', true);
+      const target = document.querySelector('#wb-editor [data-meaning-choice]') || document.querySelector('#wb-translation');
+      onboarding.showInstruction({
+        eyebrow: '第 1 步 · 选择一个释义',
+        title: '用你认同的意思收录',
+        copy: '勾选一个词典义项。选择本身不会完成教程，确认后还要点击“收录到单词本”。'
+      }, target);
+    });
+    document.addEventListener('vocabnote:wordbook-meaning-selected', (event) => {
+      const guide = activeGuideState();
+      if (!guide || guide.step !== 'wordbook' || Number(event.detail?.count) < 1) return;
+      onboarding.showInstruction({
+        eyebrow: '第 1 步 · 保存到单词本',
+        title: '现在把它留下来',
+        copy: '你选中的释义会写入词条。点击收录，成功保存后才会进入下一步。'
+      }, '#wb-save');
+    });
+    document.addEventListener('vocabnote:wordbook-editor-closed', (event) => {
+      markOnboardingCloseControls('#wb-editor [data-wb-close]', false);
+      if (!event.detail?.saved && guideAt('wordbook')) onboarding.close();
+    });
+    document.addEventListener('vocabnote:wordbook-saved', (event) => void advanceCoreGuide('wordbook', event.detail));
+    document.addEventListener('vocabnote:composition-saved', (event) => void advanceCoreGuide('composition', event.detail));
+    document.addEventListener('vocabnote:preload-ready', (event) => void advanceCoreGuide('preload', event.detail));
+    document.addEventListener('vocabnote:mobile-word-action-opened', (event) => {
+      if (!guideAt('annotation')) return;
+      onboarding.showInstruction({
+        eyebrow: '第 4 步 · 打开收录页',
+        title: '继续收录这个单词',
+        copy: '这条语境释义已经准备好了。点击“收录单词”，写下自己的理解。'
+      }, event.detail?.target || dom.mobileWordRecord);
+    });
+    document.addEventListener('vocabnote:annotation-saved', (event) => void advanceCoreGuide('annotation', event.detail));
   }
 
   async function loadEssays(preferredId = state.selectedId) {
@@ -730,6 +1105,17 @@
 
   async function logout() {
     dom.logoutButton.disabled = true;
+    onboarding.close();
+    onboardingView = null;
+    onboardingRequestId += 1;
+    aiRequirementRequestId += 1;
+    aiRequirementPromise = null;
+    coreProgressBusy = false;
+    pendingAiRetry = null;
+    preloadAiResume = null;
+    temporaryAiGuide = false;
+    latestPreloadProgress = null;
+    activePreloadAiKey = null;
     wordbook.reset();
     ++listRequestId;
     ++detailRequestId;
@@ -750,7 +1136,21 @@
     document.querySelector('#essay-dialog-title').textContent = '收进一篇范文';
     dom.essayForm.reset();
     dom.essayFormError.textContent = '';
+    const guidedComposition = guideAt('composition');
+    if (guidedComposition) {
+      dom.essayTitle.value = ONBOARDING_SAMPLE_ESSAY.title;
+      dom.essaySourceLabel.value = ONBOARDING_SAMPLE_ESSAY.sourceLabel;
+      dom.essayContent.value = ONBOARDING_SAMPLE_ESSAY.content;
+      markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', true);
+    }
     openDialog(dom.essayDialog);
+    if (guidedComposition) {
+      onboarding.showInstruction({
+        eyebrow: '第 2 步 · 保存一篇范文',
+        title: '把示例改成你的材料也可以',
+        copy: '题目和正文都已放入可编辑示例。确认后保存，系统会立即为这篇范文预加载语境释义。'
+      }, dom.essayForm);
+    }
     window.setTimeout(() => dom.essayTitle.focus(), 0);
   }
 
@@ -797,11 +1197,17 @@
         normalizeListItem({ ...created, noteCount: created.annotations.length }),
         ...state.essays.filter((essay) => essay.id !== created.id)
       ];
+      markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', false);
       closeDialog(dom.essayDialog);
       renderAll();
       if (isMobileLayout()) dom.workspace.classList.add('show-reader');
       void refreshEssayList();
       showToast(editing ? '修改已保存，正在更新语境释义。' : '范文已保存，正在后台预加载语境释义。');
+      emitOnboardingEvent('vocabnote:composition-saved', {
+        compositionId: created.id,
+        composition: created,
+        editing: Boolean(editing)
+      });
     } catch (error) {
       if (!handleExpiredSession(error)) dom.essayFormError.textContent = errorMessage(error, '范文暂时没有保存成功。');
     } finally {
@@ -849,6 +1255,55 @@
     return pending;
   }
 
+  function preloadProgressKey(essay) {
+    return `${essay.id}:${essay.contentVersion}`;
+  }
+
+  function announcePreloadReady(essay, progress) {
+    const readyTarget = progress.results
+      .map(row => dom.essayBody.querySelector(`[data-start="${row.startOffset}"][data-end="${row.endOffset}"]`))
+      .find(Boolean) || dom.essayBody.querySelector('.essay-word[data-ready="true"]');
+    if (!readyTarget) return;
+    emitOnboardingEvent('vocabnote:preload-ready', {
+      compositionId: essay.id,
+      contentVersion: essay.contentVersion,
+      target: readyTarget
+    });
+  }
+
+  function requestPreloadAiSetup(essay, progress) {
+    if (!preloadNeedsAiSetup(progress)) return;
+    const key = preloadProgressKey(essay);
+    if (activePreloadAiKey === key) return;
+    const activeGuide = activeGuideState();
+    if (activeGuide && activeGuide.step !== 'preload') return;
+    activePreloadAiKey = key;
+    const detail = {
+      source: 'preload',
+      forceTutorial: guideAt('preload'),
+      resume: () => retryPreload(),
+      showDirectAction: () => {
+        preloadAiResume = () => retryPreload();
+        dom.preloadRetry.hidden = false;
+        dom.preloadRetry.textContent = '打开 AI 设置';
+      }
+    };
+    emitOnboardingEvent('vocabnote:ai-required', detail);
+    void requireAi(detail);
+  }
+
+  function replayLatestPreloadProgress() {
+    const essay = currentEssay();
+    const snapshot = latestPreloadProgress;
+    if (!essay || !snapshot
+      || String(snapshot.essayId) !== String(essay.id)
+      || snapshot.contentVersion !== essay.contentVersion) return;
+    if (preloadNeedsAiSetup(snapshot.progress)) requestPreloadAiSetup(essay, snapshot.progress);
+    if (snapshot.progress.done > 0 || snapshot.progress.results.length > 0) {
+      announcePreloadReady(essay, snapshot.progress);
+    }
+  }
+
   function watchPreload(essay) {
     const token = ++preloadRequestId;
     window.clearTimeout(preloadTimer);
@@ -882,6 +1337,18 @@
         dom.preloadMeter.value = progress.done;
         dom.preloadMeter.hidden = progress.status === 'complete' || progress.total === 0;
         dom.preloadRetry.hidden = progress.status !== 'paused';
+        latestPreloadProgress = {
+          essayId: essay.id,
+          contentVersion: essay.contentVersion,
+          progress
+        };
+        if (!preloadNeedsAiSetup(progress)) activePreloadAiKey = null;
+        if (progress.status !== 'paused') {
+          preloadAiResume = null;
+          dom.preloadRetry.textContent = '重试未完成部分';
+        }
+        requestPreloadAiSetup(essay, progress);
+        if (progress.done > 0 || progress.results.length > 0) announcePreloadReady(essay, progress);
         if (progress.status !== 'complete') preloadTimer = window.setTimeout(poll, progress.status === 'paused' ? 15000 : 3000);
       } catch (error) {
         if (!isCurrent() || handleExpiredSession(error)) return;
@@ -896,6 +1363,9 @@
     const essay = currentEssay();
     if (!essay || dom.preloadRetry.disabled) return;
     dom.preloadRetry.disabled = true;
+    activePreloadAiKey = null;
+    preloadAiResume = null;
+    dom.preloadRetry.textContent = '重试未完成部分';
     try {
       await api.retryPreload(essay.id);
       if (currentEssay()?.id === essay.id) watchPreload(essay);
@@ -904,6 +1374,7 @@
     } finally { dom.preloadRetry.disabled = false; }
   }
   function setExplanationLoading(isLoading, message) {
+    dom.explanationStatus.querySelector('[data-ai-settings-direct]')?.remove();
     dom.explanationStatus.dataset.loading = String(Boolean(isLoading));
     dom.explanationStatusText.textContent = message;
   }
@@ -930,14 +1401,24 @@
           || pendingAnnotation.compositionId !== essay.id
           || pendingAnnotation.startOffset !== selection.startOffset
           || pendingAnnotation.endOffset !== selection.endOffset) return;
+      const missingAi = error instanceof ApiError && error.status === 428;
       setExplanationLoading(
         false,
-        error instanceof ApiError && error.status === 428
+        missingAi
           ? '请先在右上角「AI 设置」配置自己的 API Key；仍可手动填写。'
           : error instanceof ApiError && (error.status === 503 || error.status === 429)
           ? `${error.message || '语境翻译暂不可用。'} 仍可手动填写释义或记忆提示。`
           : '暂时无法取得语境释义；仍可手动填写释义或记忆提示。'
       );
+      if (missingAi) {
+        const detail = {
+          source: 'context',
+          resume: () => fillNoteExplanation(essay, selection),
+          showDirectAction: () => showAiSettingsAction(dom.explanationStatus, () => fillNoteExplanation(essay, selection))
+        };
+        emitOnboardingEvent('vocabnote:ai-required', detail);
+        void requireAi(detail);
+      }
     }
   }
 
@@ -970,7 +1451,18 @@
         ? '已载入这条摘录的释义；你可以按自己的理解改写。'
         : '正在准备语境翻译；你也可以按自己的理解修改。'
     );
+    const guidedAnnotation = guideAt('annotation');
+    if (guidedAnnotation) {
+      markOnboardingCloseControls('#note-dialog [data-close-dialog]', true);
+    }
     openDialog(dom.noteDialog);
+    if (guidedAnnotation) {
+      onboarding.showInstruction({
+        eyebrow: '第 4 步 · 保存一条笔记',
+        title: '写下你的理解',
+        copy: '可以使用自动填入的释义，也可以改成自己的表达。至少填写一项后，保存到本篇笔记。'
+      }, dom.noteForm);
+    }
     window.setTimeout(() => dom.noteTranslation.focus(), 0);
     if (!existing || !existing.translationZh) {
       void fillNoteExplanation(essay, pendingAnnotation);
@@ -1007,12 +1499,18 @@
       const existingIndex = essay.annotations.findIndex((annotation) => annotation.id === saved.id);
       if (existingIndex >= 0) essay.annotations.splice(existingIndex, 1, saved);
       else essay.annotations.push(saved);
+      markOnboardingCloseControls('#note-dialog [data-close-dialog]', false);
       closeDialog(dom.noteDialog);
       pendingAnnotation = null;
       hidePhraseAction();
       renderAll();
       void refreshEssayList();
       showToast(existingIndex >= 0 ? '这条摘录已经更新。' : '已保存到本篇笔记。');
+      emitOnboardingEvent('vocabnote:annotation-saved', {
+        annotationId: saved.id,
+        compositionId: essay.id,
+        kind: saved.kind
+      });
     } catch (error) {
       if (!handleExpiredSession(error)) dom.noteFormError.textContent = errorMessage(error, '笔记暂时没有保存成功。');
     } finally {
@@ -1101,6 +1599,11 @@
     dom.mobileWordAction.hidden = true;
   }
 
+  function closeMobileWordAction() {
+    hideMobileWordAction();
+    if (guideAt('annotation')) onboarding.close();
+  }
+
   function openMobileWordAction(wordNode) {
     const essay = currentEssay();
     if (!essay) return;
@@ -1132,6 +1635,7 @@
     dom.mobileWordStatus.textContent = actionState.helperText;
     dom.mobileWordMeaning.textContent = existing?.translationZh || (hasExplanation ? '正在读取语境释义…' : actionState.helperText);
     dom.mobileWordAction.hidden = false;
+    emitOnboardingEvent('vocabnote:mobile-word-action-opened', { target: dom.mobileWordRecord });
 
     const explanation = cachedExplanation || (actionState.shouldRequestExplanation
       ? requestExplanation(essay, { kind: 'word', startOffset, endOffset })
@@ -1146,12 +1650,22 @@
       dom.mobileWordStatus.textContent = '已加载本篇语境释义。';
     }).catch((error) => {
       if (requestId !== mobileWordRequestId || mobileWordNode !== wordNode || handleExpiredSession(error)) return;
-      const message = error instanceof ApiError && (error.status === 428 || error.status === 429 || error.status === 503)
+      const missingAi = error instanceof ApiError && error.status === 428;
+      const message = error instanceof ApiError && (missingAi || error.status === 429 || error.status === 503)
         ? error.message || '语境释义暂不可用。'
         : '暂时无法取得语境释义。';
       wordNode.dataset.gloss = '点击收录后可手动填写释义。';
       dom.mobileWordMeaning.textContent = '暂时无法取得语境释义。';
       dom.mobileWordStatus.textContent = `${message} 你仍可手动收录并填写释义。`;
+      if (missingAi) {
+        const detail = {
+          source: 'mobile-context',
+          resume: () => openMobileWordAction(wordNode),
+          showDirectAction: () => showAiSettingsAction(dom.mobileWordStatus, () => openMobileWordAction(wordNode))
+        };
+        emitOnboardingEvent('vocabnote:ai-required', detail);
+        void requireAi(detail);
+      }
     });
   }
 
@@ -1335,6 +1849,7 @@
     dom.authPasswordToggle.addEventListener('click', () => authPasswordVisibility.toggle());
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));
     dom.logoutButton.addEventListener('click', () => void logout());
+    dom.learningGuideButton.addEventListener('click', () => void startManualCoreGuide());
     dom.mobileMenuButton.addEventListener('click', openMobileMenu);
     dom.mobileMenuClose.addEventListener('click', closeMobileMenu);
     dom.mobileMenuDialog.addEventListener('close', () => dom.mobileMenuButton.setAttribute('aria-expanded', 'false'));
@@ -1342,13 +1857,28 @@
       closeMobileMenu();
       void aiSettings.open();
     });
+    dom.mobileLearningGuideButton.addEventListener('click', () => {
+      closeMobileMenu();
+      void startManualCoreGuide();
+    });
+    dom.mobileAiGuideButton.addEventListener('click', () => {
+      closeMobileMenu();
+      void openAiSettings({ tutorial: true });
+    });
     dom.mobileLogoutButton.addEventListener('click', () => {
       closeMobileMenu();
       void logout();
     });
     dom.newEssayButton.addEventListener('click', openEssayDialog);
     document.querySelector('#edit-essay-button').addEventListener('click', openEditEssayDialog);
-    dom.preloadRetry.addEventListener('click', () => void retryPreload());
+    dom.preloadRetry.addEventListener('click', () => {
+      const resume = preloadAiResume;
+      if (resume) {
+        void openAiSettings({ tutorial: false, resume });
+        return;
+      }
+      void retryPreload();
+    });
     document.querySelectorAll('[data-open-new-essay]').forEach((button) => button.addEventListener('click', openEssayDialog));
     document.querySelectorAll('[data-close-dialog]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -1356,13 +1886,24 @@
         if (dialog === dom.noteDialog) {
           pendingAnnotation = null;
           setExplanationLoading(false, '正在准备语境翻译；你也可以按自己的理解修改。');
+          if (guideAt('annotation')) onboarding.close();
+        }
+        if (dialog === dom.essayDialog && guideAt('composition')) {
+          markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', false);
+          onboarding.close();
         }
         closeDialog(dialog);
       });
     });
+    dom.essayDialog.addEventListener('cancel', () => {
+      if (!guideAt('composition')) return;
+      markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', false);
+      onboarding.close();
+    });
     dom.noteDialog.addEventListener('cancel', () => {
       pendingAnnotation = null;
       setExplanationLoading(false, '正在准备语境翻译；你也可以按自己的理解修改。');
+      if (guideAt('annotation')) onboarding.close();
     });
     dom.essayForm.addEventListener('submit', (event) => void saveEssay(event));
     dom.noteForm.addEventListener('submit', (event) => void saveNote(event));
@@ -1409,7 +1950,7 @@
 
     dom.phraseAction.addEventListener('mousedown', (event) => event.preventDefault());
     dom.explainPhraseButton.addEventListener('click', openSelectedPhrase);
-    dom.mobileWordClose.addEventListener('click', hideMobileWordAction);
+    dom.mobileWordClose.addEventListener('click', closeMobileWordAction);
     dom.mobileWordRecord.addEventListener('click', openMobileWordNote);
     document.addEventListener('selectionchange', schedulePhraseAction);
     document.addEventListener('keydown', (event) => {
@@ -1447,13 +1988,22 @@
   const wordbook = window.Wordbook.init({
     api,
     onUnauthorized: () => showAuthGate('登录状态已失效，请重新登录。'),
-    onOpenComposition: (id) => switchView('compositions', String(id))
+    onOpenComposition: (id) => switchView('compositions', String(id)),
+    onRequireAi: (detail) => { void requireAi(detail); }
   });
   const aiSettings = window.AiSettings.init({
     api,
     onUnauthorized: () => showAuthGate('登录状态已失效，请重新登录。'),
-    onChanged: () => { translationUnavailableUntil = 0; if (currentEssay()) void retryPreload(); }
+    onChanged: () => {
+      translationUnavailableUntil = 0;
+      if (!pendingAiRetry && currentEssay()) void retryPreload();
+    }
   });
+  const onboarding = onboardingModule.createOnboardingController({
+    onSkip: async () => { onboardingView = await api.skipOnboarding(); },
+    onAction: handleGuideAction
+  });
+  wireOnboardingEvents();
   document.querySelectorAll('[data-site-view]').forEach(button => {
     button.addEventListener('click', () => {
       if (state.currentUser && !dom.logoutButton.disabled) switchView(button.dataset.siteView);

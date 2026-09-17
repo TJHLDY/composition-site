@@ -125,7 +125,7 @@
     }
   }
 
-  function init({ api, onUnauthorized, onOpenComposition, root = document.querySelector('#wordbook-view') }) {
+  function init({ api, onUnauthorized, onOpenComposition, onRequireAi = () => {}, root = document.querySelector('#wordbook-view') }) {
     if (!root) throw new Error('Wordbook container is missing.');
     const $ = selector => root.querySelector(selector);
     const list = $('#wb-list');
@@ -147,6 +147,7 @@
     let composing = false;
     let compositionEndedAt = 0;
     let editingId = null;
+    let editorSaved = false;
     let confirmationAction = null;
     let confirmationBusy = false;
 
@@ -171,13 +172,46 @@
     const editorForm = $('#wb-editor-form');
     const confirmDialog = $('#wb-confirm');
 
-    function report(error, target = status, ai = false) {
+    function emit(name, detail = {}) {
+      document.dispatchEvent(new CustomEvent(name, { detail }));
+    }
+
+    function addAiSettingsAction(target, resume) {
+      if (!target?.isConnected || target.querySelector('[data-ai-settings-direct]')) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'text-action wb-ai-settings-action';
+      button.dataset.aiSettingsDirect = 'true';
+      button.textContent = '打开 AI 设置';
+      button.addEventListener('click', () => onRequireAi({
+        source: 'wordbook',
+        resume,
+        forceOpen: true,
+        showDirectAction: () => {}
+      }));
+      target.append(document.createTextNode(' '), button);
+    }
+
+    function requireAi(error, target, resume) {
+      if (error?.status !== 428 || error?.userMessage) return;
+      const detail = {
+        source: 'wordbook',
+        error,
+        resume,
+        showDirectAction: () => addAiSettingsAction(target, resume)
+      };
+      emit('vocabnote:ai-required', detail);
+      onRequireAi(detail);
+    }
+
+    function report(error, target = status, ai = false, resume) {
       if (!active) return;
       if (error?.status === 401) { onUnauthorized(error); return; }
       target.textContent = ai && !error?.userMessage
         ? aiFailureMessage(error)
         : (error?.message || '暂时没有完成，请重试。');
       target.dataset.error = 'true';
+      if (ai) requireAi(error, target, resume);
     }
 
     function validateAi(term, translationZh, target) {
@@ -341,7 +375,11 @@
       try {
         const result = await work(current);
         if (current() && active) complete(result);
-      } catch (error) { if (current()) report(error, target, ai); }
+      } catch (error) {
+        if (current()) report(error, target, ai, () => {
+          if (button.isConnected) void act(button, lane, work, complete, target, ai);
+        });
+      }
       finally { if (current() && button.isConnected) { button.disabled = false; button.textContent = label; } }
     }
 
@@ -349,6 +387,7 @@
       search.cancel();
       dialogScope.reset();
       editingId = isEdit ? entry.id : null;
+      editorSaved = false;
       editorDictionary = entry?.dictionary || null;
       editorForm.reset();
       $('#wb-editor-title').textContent = isEdit ? '编辑词条' : '收录词条';
@@ -364,6 +403,7 @@
       $('#wb-editor-status').textContent = '';
       editor.showModal();
       $('#wb-term').focus();
+      emit('vocabnote:wordbook-editor-opened', { editing: Boolean(editingId), term: $('#wb-term').value });
     }
 
     async function fillEditor() {
@@ -391,7 +431,7 @@
         if ($('#wb-term').value.trim().toLowerCase() === result.term.toLowerCase()) editorDictionary = result.dictionary || null;
         $('#wb-editor-dictionary').innerHTML = dictionarySelectionMarkup(editorDictionary, $('#wb-translation').value);
         $('#wb-editor-status').textContent = '已补充空白项，请检查后收录。';
-      } catch (error) { if (current()) report(error, $('#wb-editor-status'), true); }
+      } catch (error) { if (current()) report(error, $('#wb-editor-status'), true, () => void fillEditor()); }
       finally { if (current()) $('#wb-fill-button').disabled = false; }
     }
 
@@ -406,9 +446,12 @@
       $('#wb-save').disabled = true;
       $('#wb-fill-button').disabled = true;
       $('#wb-editor-status').textContent = '正在保存…';
+      const wasEditing = Boolean(editingId);
       try {
         const saved = editingId ? await api.updateWordbook(editingId, payload) : await api.createWordbook(payload);
         if (!current() || !active) return;
+        editorSaved = true;
+        emit('vocabnote:wordbook-saved', { entryId: String(saved.id), entry: saved, editing: wasEditing });
         editor.close();
         query.value = '';
         page = 0;
@@ -481,7 +524,14 @@
       onResult(result) {
         if (!active) return;
         if (result.entry) { void openEntry(result.entry.id, result.entry.kind); }
-        else { clearContent(); preview = result.preview; collocations = preview.collocations || []; renderDetail(); showDetail(); }
+        else {
+          clearContent();
+          preview = result.preview;
+          collocations = preview.collocations || [];
+          renderDetail();
+          showDetail();
+          emit('vocabnote:wordbook-preview-ready', { term: preview.term });
+        }
       },
       onError(error) {
         if (!active) return;
@@ -489,6 +539,7 @@
           status.textContent = '';
           status.dataset.error = 'false';
           detail.innerHTML = lookupFailureMarkup(aiFailureMessage(error));
+          requireAi(error, detail.querySelector('.wb-status'), () => lookup());
         } else report(error, status, true);
       },
       onBusy(busy) {
@@ -549,6 +600,7 @@
       }
       $('#wb-translation').value = value;
       $('#wb-editor-status').textContent = choices.length ? `已选择 ${choices.length} 个义项，确认后即可收录。` : '已取消选择，可以重新选择或手动填写。';
+      emit('vocabnote:wordbook-meaning-selected', { count: choices.length });
     });
     $('#wb-translation').addEventListener('input', () => {
       const lines = new Set($('#wb-translation').value.split('\n').map(s => s.trim()));
@@ -558,7 +610,11 @@
     $('#wb-fill-query').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); if (!event.isComposing && event.keyCode !== 229) void fillEditor(); } });
     $('#wb-fill-query').addEventListener('input', () => { dialogScope.start('fill'); $('#wb-fill-button').disabled = false; $('#wb-editor-status').textContent = ''; });
     root.querySelectorAll('[data-wb-close]').forEach(button => button.addEventListener('click', () => editor.close()));
-    editor.addEventListener('close', () => dialogScope.reset());
+    editor.addEventListener('close', () => {
+      dialogScope.reset();
+      emit('vocabnote:wordbook-editor-closed', { saved: editorSaved });
+      editorSaved = false;
+    });
     $('#wb-confirm-delete').addEventListener('click', () => void removeConfirmed());
     $('#wb-confirm-cancel').addEventListener('click', () => confirmDialog.close());
     confirmDialog.addEventListener('cancel', event => { if (confirmationBusy) event.preventDefault(); });
@@ -702,6 +758,14 @@
         status.textContent = '';
         renderList({ items: [], total: 0, wordCount: 0, phraseCount: 0 });
         emptyDetail();
+      },
+      beginGuidedSearch(defaultTerm = 'explore') {
+        if (!active) return;
+        if (!query.value.trim()) query.value = defaultTerm;
+        query.focus({ preventScroll: true });
+      },
+      openEntry(id) {
+        if (active && id !== undefined && id !== null) void openEntry(id);
       }
     };
   }

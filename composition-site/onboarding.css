@@ -46,11 +46,13 @@
   position: fixed;
   z-index: 2;
   right: max(12px, env(safe-area-inset-right));
-  bottom: max(12px, env(safe-area-inset-bottom));
+  bottom: var(--onboarding-card-bottom, max(12px, env(safe-area-inset-bottom)));
   left: max(12px, env(safe-area-inset-left));
   max-width: 520px;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   margin: 0 auto;
   padding: 18px 18px 17px;
+  overflow-y: auto;
   pointer-events: auto;
   color: #1f3028;
   border: 1px solid rgba(224,173,87,.72);
@@ -63,6 +65,10 @@
 
 .onboarding-layer[data-keyboard-open="true"] .onboarding-card {
   bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--onboarding-keyboard-offset, 0px));
+}
+
+.onboarding-layer[data-card-position="above-target"] .onboarding-card {
+  bottom: var(--onboarding-card-bottom, max(12px, env(safe-area-inset-bottom)));
 }
 
 .onboarding-card-topline {

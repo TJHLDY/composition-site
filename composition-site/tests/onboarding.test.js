@@ -1,11 +1,16 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   createGuideState,
   reduceGuide,
   shouldAutoStart
 } = require('../onboarding.js');
+
+const siteRoot = path.resolve(__dirname, '..');
+const read = name => fs.readFileSync(path.join(siteRoot, name), 'utf8');
 
 test('only unfinished new-account state starts the automatic guide', () => {
   assert.equal(shouldAutoStart({ coreStatus: 'not_started', autoStart: true }), true);
@@ -77,4 +82,51 @@ test('skip is terminal in automatic mode while manual replay stays local', () =>
   const manual = createGuideState({ coreStatus: 'completed', autoStart: false }, { mode: 'manual' });
   assert.equal(manual.mode, 'manual');
   assert.equal(reduceGuide(manual, { type: 'skip' }).step, 'skipped');
+});
+
+test('the guide is driven by completed learning actions, not by timers or a meaning checkbox alone', () => {
+  const app = read('app.js');
+  const wordbook = read('wordbook.js');
+  const aiSettings = read('ai-settings.js');
+
+  assert.match(wordbook, /vocabnote:wordbook-saved/);
+  assert.match(wordbook, /vocabnote:wordbook-meaning-selected/);
+  assert.match(app, /vocabnote:composition-saved/);
+  assert.match(app, /vocabnote:preload-ready/);
+  assert.match(app, /vocabnote:annotation-saved/);
+  assert.match(app, /vocabnote:ai-required/);
+  assert.match(aiSettings, /vocabnote:ai-test-passed/);
+  assert.match(app, /preloadNeedsAiSetup/);
+  assert.match(app, /showCompletionTip/);
+  assert.match(wordbook, /explore/);
+  assert.match(read('onboarding.js'), /长按或拖动连续文字/);
+});
+
+test('AI setup requires a verified test during the tutorial and claims its automatic hint only once', () => {
+  const app = read('app.js');
+  const aiSettings = read('ai-settings.js');
+
+  assert.match(aiSettings, /tutorial && !passedTest/);
+  assert.match(aiSettings, /onSaved/);
+  assert.match(app, /claimAiGuide/);
+  assert.match(app, /if\s*\(claim\.show\)/);
+  assert.match(app, /openAiSettings/);
+  assert.match(app, /mode === 'auto'/);
+});
+
+test('the mobile annotation step retargets the compact word card before opening the note form', () => {
+  const app = read('app.js');
+
+  assert.match(app, /vocabnote:mobile-word-action-opened/);
+  assert.match(app, /target:\s*dom\.mobileWordRecord/);
+  assert.match(app, /function closeMobileWordAction/);
+});
+
+test('the spotlight card moves above controls placed in the mobile footer', () => {
+  const guide = read('onboarding.js');
+  const styles = read('onboarding.css');
+
+  assert.match(guide, /data-card-position/);
+  assert.match(guide, /--onboarding-card-bottom/);
+  assert.match(styles, /data-card-position="above-target"/);
 });
