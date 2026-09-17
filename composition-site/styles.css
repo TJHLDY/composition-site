@@ -201,6 +201,7 @@ h1, h2 { color: var(--ink); font-family: var(--display); }
 h1 { margin: 0; font-size: 1.64rem; font-weight: 700; letter-spacing: .03em; }
 
 .masthead-actions { gap: 13px; }
+.learning-guide-button { white-space: nowrap; }
 
 .preview-badge, .account-chip {
   padding: 6px 9px;
@@ -646,6 +647,7 @@ input:focus, textarea:focus { border-color: var(--moss); box-shadow: 0 0 0 3px r
 .mobile-menu-heading h2 { margin: 0; font-size: 1.7rem; }
 .mobile-account-name { margin: 0; color: var(--muted); font-size: .84rem; overflow-wrap: anywhere; }
 .mobile-menu-sheet .secondary-button, .mobile-logout-button { min-height: 48px; text-align: left; }
+.mobile-guide-button { position: relative; }
 .mobile-logout-button { padding: 10px 14px; color: var(--vermilion); font: inherit; font-size: .8rem; font-weight: 800; border: 1px solid rgba(188,76,53,.28); border-radius: 2px; background: transparent; }
 
 .selection-hint-mobile { display: none; }
@@ -707,7 +709,7 @@ input:focus, textarea:focus { border-color: var(--moss); box-shadow: 0 0 0 3px r
   .brand-mark { width: 34px; height: 34px; }
   h1 { font-size: 1.22rem; }
   .masthead-actions { gap: 8px; }
-  .masthead-actions > #ai-settings-button, .masthead-actions .account-chip { display: none; }
+  .masthead-actions > #ai-settings-button, .masthead-actions > #learning-guide-button, .masthead-actions .account-chip { display: none; }
   .mobile-menu-button { display: grid; width: 44px; height: 44px; box-shadow: none; }
   .mobile-menu-button span { font-family: var(--body); font-size: 1.65rem; font-weight: 700; line-height: 1; transform: translateY(-4px); }
   .add-button { width: 44px; height: 44px; box-shadow: 0 3px 0 #15362a; }

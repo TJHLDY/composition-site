@@ -1,1 +1,151 @@
-/* The guided-learning overlay is styled here so its visual layer can load independently. */
+:root {
+  --onboarding-ink: #193e31;
+  --onboarding-paper: #fffdf7;
+  --onboarding-warm: #e0ad57;
+  --onboarding-red: #b54d35;
+}
+
+.onboarding-layer {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  pointer-events: none;
+}
+
+.onboarding-layer[hidden] { display: none !important; }
+
+.onboarding-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 31, 25, .77);
+  -webkit-backdrop-filter: saturate(.72) blur(1px);
+  backdrop-filter: saturate(.72) blur(1px);
+}
+
+.onboarding-target-ring {
+  position: fixed;
+  z-index: 1;
+  min-width: 44px;
+  min-height: 44px;
+  pointer-events: none;
+  border: 2px solid var(--onboarding-warm);
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(255,253,247,.92), 0 0 0 7px rgba(224,173,87,.28), 0 15px 36px rgba(0,0,0,.28);
+  transition: left 150ms ease, top 150ms ease, width 150ms ease, height 150ms ease;
+}
+
+.onboarding-target-active {
+  position: relative;
+  z-index: 81 !important;
+  outline: 2px solid var(--onboarding-warm);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.onboarding-card {
+  position: fixed;
+  z-index: 2;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 18px 18px 17px;
+  pointer-events: auto;
+  color: #1f3028;
+  border: 1px solid rgba(224,173,87,.72);
+  border-radius: 12px 12px 4px 4px;
+  background:
+    linear-gradient(115deg, rgba(255,253,247,.98), rgba(250,246,235,.98)),
+    var(--onboarding-paper);
+  box-shadow: 0 18px 46px rgba(0,0,0,.31), inset 4px 0 0 var(--onboarding-red);
+}
+
+.onboarding-layer[data-keyboard-open="true"] .onboarding-card {
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--onboarding-keyboard-offset, 0px));
+}
+
+.onboarding-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onboarding-eyebrow {
+  margin: 0;
+  color: var(--onboarding-ink);
+  font-size: .66rem;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.onboarding-skip {
+  min-width: 44px;
+  min-height: 38px;
+  padding: 7px 0 7px 9px;
+  color: #506157;
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 0;
+  border-bottom: 1px solid rgba(80,97,87,.42);
+  background: transparent;
+}
+
+.onboarding-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  margin: 15px 0 16px;
+}
+
+.onboarding-progress-marker {
+  height: 3px;
+  background: rgba(25,62,49,.14);
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.onboarding-progress-marker.is-complete { background: rgba(25,62,49,.6); }
+.onboarding-progress-marker.is-current { background: var(--onboarding-red); transform: scaleY(1.7); transform-origin: center; }
+
+.onboarding-card h2 {
+  margin: 0;
+  color: #182a22;
+  font-family: var(--display, Georgia, serif);
+  font-size: clamp(1.42rem, 5.8vw, 1.9rem);
+  line-height: 1.16;
+}
+
+.onboarding-card > p:not(.onboarding-eyebrow):not(.onboarding-status) {
+  margin: 9px 0 0;
+  color: #5d665d;
+  font-size: .86rem;
+  line-height: 1.72;
+}
+
+.onboarding-status {
+  min-height: 1.35em;
+  margin: 9px 0 0;
+  color: var(--onboarding-red);
+  font-size: .73rem;
+  line-height: 1.45;
+}
+
+.onboarding-card-actions:empty { display: none; }
+.onboarding-card-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+.onboarding-card-actions .secondary-button, .onboarding-card-actions .primary-button { min-height: 44px; }
+
+.onboarding-tip-only { pointer-events: none; }
+.onboarding-tip-only .onboarding-card { pointer-events: auto; }
+.onboarding-tip-only .onboarding-skip { display: none; }
+
+@media (max-width: 420px) {
+  .onboarding-card { padding: 16px 15px 15px; }
+  .onboarding-card > p:not(.onboarding-eyebrow):not(.onboarding-status) { font-size: .82rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-target-ring, .onboarding-progress-marker { transition: none; }
+}

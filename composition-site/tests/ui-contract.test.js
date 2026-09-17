@@ -55,6 +55,9 @@ const styles = read('styles.css');
   'id="forgot-password-link"',
   'id="remember-me"',
   'id="logout-button"',
+  'id="learning-guide-button"',
+  'id="mobile-learning-guide-button"',
+  'id="mobile-ai-guide-button"',
   'src="api-client.js"'
 ].forEach((requiredAnchor) => {
   assert.ok(html.includes(requiredAnchor), `Expected interface anchor: ${requiredAnchor}`);

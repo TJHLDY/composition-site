@@ -62,3 +62,23 @@ test('mobile styles reserve large touch targets and stack the verification-code 
   assert.match(wordbookStyles, /@media\s*\(max-width:\s*720px\)[\s\S]*\.wb-search\s*\{[\s\S]*position:\s*sticky/s);
   assert.match(wordbookStyles, /@media\s*\(max-width:\s*480px\)\s*\{\s*\.site-nav button span\s*\{\s*display:\s*none/s);
 });
+
+test('mobile onboarding uses one safe-area-aware spotlight layer with five visible milestones', () => {
+  const onboarding = read('onboarding.js');
+  const onboardingStyles = read('onboarding.css');
+  const html = read('index.html');
+
+  assert.match(onboarding, /id="onboarding-layer"/);
+  assert.match(onboarding, /data-onboarding-action="skip"/);
+  assert.equal((onboarding.match(/data-onboarding-progress/g) || []).length, 5);
+  assert.match(onboarding, /onboarding-target-ring/);
+  assert.match(onboarding, /blockOutsideGuide/);
+  assert.match(onboarding, /document\.addEventListener\('click', blockOutsideGuide, true\)/);
+  assert.match(onboardingStyles, /bottom:\s*max\(12px,\s*env\(safe-area-inset-bottom\)\)/);
+  assert.match(onboardingStyles, /z-index:\s*(?:[4-9]\d|[1-9]\d{2,})/);
+  assert.match(onboardingStyles, /min-width:\s*44px/);
+  assert.match(onboardingStyles, /min-height:\s*44px/);
+  assert.match(html, /id="mobile-learning-guide-button"/);
+  assert.match(html, /id="mobile-ai-guide-button"/);
+  assert.match(html, /id="learning-guide-button"/);
+});
