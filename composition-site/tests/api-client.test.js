@@ -198,5 +198,48 @@ const api = createApiClient({
     newPassword: 'FreshPass456'
   }, '重置密码只提交邮箱、验证码和新密码。');
 
+  const onboardingCalls = [];
+  const onboardingReplies = [
+    response(200, { tutorialVersion: 1, coreStatus: 'not_started', autoStart: true }),
+    response(200, { tutorialVersion: 1, coreStatus: 'in_progress', autoStart: true }),
+    response(200, { tutorialVersion: 1, coreStatus: 'in_progress', autoStart: true, tutorialWordbookId: 12 }),
+    response(200, { tutorialVersion: 1, coreStatus: 'in_progress', autoStart: true, tutorialCompositionId: 34 }),
+    response(200, { tutorialVersion: 1, coreStatus: 'completed', autoStart: false }),
+    response(200, { tutorialVersion: 1, coreStatus: 'skipped', autoStart: false }),
+    response(200, { show: true })
+  ];
+  const onboardingStorage = memoryStorage();
+  onboardingStorage.setItem(SESSION_TOKEN_KEY, 'onboarding-token');
+  const onboardingApi = createApiClient({
+    storage: onboardingStorage,
+    fetchImpl: async (url, options) => {
+      onboardingCalls.push({ url, options });
+      return onboardingReplies.shift();
+    }
+  });
+  assert.equal((await onboardingApi.getOnboarding()).coreStatus, 'not_started');
+  await onboardingApi.startOnboarding();
+  await onboardingApi.recordOnboardingWordbook(12);
+  await onboardingApi.recordOnboardingComposition(34);
+  await onboardingApi.completeOnboarding(56);
+  await onboardingApi.skipOnboarding();
+  assert.equal((await onboardingApi.claimAiGuide()).show, true);
+  assert.deepEqual(onboardingCalls.map(call => call.url), [
+    '/api/onboarding',
+    '/api/onboarding/core/start',
+    '/api/onboarding/core/wordbook/12',
+    '/api/onboarding/core/composition/34',
+    '/api/onboarding/core/complete',
+    '/api/onboarding/core/skip',
+    '/api/onboarding/ai-guide/claim'
+  ]);
+  assert.equal(onboardingCalls[0].options.method, 'GET');
+  assert.equal(onboardingCalls[1].options.method, 'POST');
+  assert.equal(onboardingCalls[2].options.body, undefined);
+  assert.deepEqual(JSON.parse(onboardingCalls[4].options.body), { annotationId: 56 });
+  onboardingCalls.forEach(call => {
+    assert.equal(call.options.headers.Authorization, 'Bearer onboarding-token');
+  });
+
   console.log('Authenticated composition API client passed.');
 })();

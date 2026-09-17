@@ -196,6 +196,22 @@
         requiresAuth: false
       }),
       currentUser: () => request('/api/auth/me'),
+      getOnboarding: () => request('/api/onboarding'),
+      startOnboarding: () => request('/api/onboarding/core/start', { method: 'POST' }),
+      recordOnboardingWordbook: (entryId) => request(
+        `/api/onboarding/core/wordbook/${encodeURIComponent(entryId)}`,
+        { method: 'POST' }
+      ),
+      recordOnboardingComposition: (compositionId) => request(
+        `/api/onboarding/core/composition/${encodeURIComponent(compositionId)}`,
+        { method: 'POST' }
+      ),
+      completeOnboarding: (annotationId) => request('/api/onboarding/core/complete', {
+        method: 'POST',
+        body: { annotationId }
+      }),
+      skipOnboarding: () => request('/api/onboarding/core/skip', { method: 'POST' }),
+      claimAiGuide: () => request('/api/onboarding/ai-guide/claim', { method: 'POST' }),
       listWordbook: (filters = {}) => {
         const params = new URLSearchParams();
         for (const key of ['kind', 'q', 'exact', 'page', 'size']) {

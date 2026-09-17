@@ -52,7 +52,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/forgot-password/send-code",
                                 "/api/auth/forgot-password/reset").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/styles.css", "/api-client.js", "/app.js", "/essay-utils.js", "/password-visibility.js", "/wordbook.js", "/wordbook.css", "/ai-settings.js").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/styles.css", "/api-client.js", "/app.js", "/essay-utils.js", "/password-visibility.js", "/wordbook.js", "/wordbook.css", "/ai-settings.js", "/onboarding.js", "/onboarding.css").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(bearerSessionFilter, UsernamePasswordAuthenticationFilter.class)

@@ -75,6 +75,8 @@
                     <include>wordbook.js</include>
                     <include>ai-settings.js</include>
                     <include>wordbook.css</include>
+                    <include>onboarding.js</include>
+                    <include>onboarding.css</include>
                 </includes>
             </resource>
             <resource>

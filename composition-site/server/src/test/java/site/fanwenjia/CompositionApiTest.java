@@ -106,6 +106,13 @@ class CompositionApiTest {
         mockMvc.perform(get("/api-client.js")).andExpect(status().isOk());
         mockMvc.perform(get("/app.js")).andExpect(status().isOk());
         mockMvc.perform(get("/essay-utils.js")).andExpect(status().isOk());
+        mockMvc.perform(get("/onboarding.js")).andExpect(status().isOk());
+        mockMvc.perform(get("/onboarding.css")).andExpect(status().isOk());
+        mockMvc.perform(get("/index.html"))
+                .andExpect(result -> assertThat(new String(
+                        result.getResponse().getContentAsByteArray(),
+                        StandardCharsets.UTF_8
+                )).contains("onboarding.js").contains("onboarding.css"));
 
         mockMvc.perform(get("/api/compositions"))
                 .andExpect(status().isUnauthorized());
