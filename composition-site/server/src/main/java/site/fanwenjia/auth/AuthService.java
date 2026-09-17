@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import site.fanwenjia.onboarding.OnboardingService;
 
 @Service
 public class AuthService {
@@ -28,6 +29,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final VerificationCodeStore verificationCodeStore;
     private final VerificationEmailSender verificationEmailSender;
+    private final OnboardingService onboardingService;
     private final Duration codeTtl;
     private final Duration codeCooldown;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -38,6 +40,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             VerificationCodeStore verificationCodeStore,
             VerificationEmailSender verificationEmailSender,
+            OnboardingService onboardingService,
             @Value("${composition.auth.code-expire-minutes:5}") long codeExpireMinutes,
             @Value("${composition.auth.code-resend-seconds:60}") long codeResendSeconds
     ) {
@@ -46,6 +49,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.verificationCodeStore = verificationCodeStore;
         this.verificationEmailSender = verificationEmailSender;
+        this.onboardingService = onboardingService;
         this.codeTtl = Duration.ofMinutes(codeExpireMinutes);
         this.codeCooldown = Duration.ofSeconds(codeResendSeconds);
     }
@@ -65,6 +69,7 @@ public class AuthService {
                 request.displayName().trim(),
                 passwordEncoder.encode(request.password())
         ));
+        onboardingService.createForNewAccount(user.getId());
         return issueSession(user);
     }
 
