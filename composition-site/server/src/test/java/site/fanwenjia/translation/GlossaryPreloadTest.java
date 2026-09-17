@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import site.fanwenjia.auth.*;
@@ -102,8 +103,26 @@ class GlossaryPreloadTest {
         when(ai.explainBatch(anyList(),any())).thenThrow(new TranslationUnavailableException());
         var worker=new GlossaryWorker(store,explanations);
         for(int i=0;i<3;i++) {jobs.findById(essay.id()).orElseThrow().nextAttempt=Instant.EPOCH;worker.runNext();}
-        assertThat(store.progress(user,essay.id(),0).status()).isEqualTo("paused");worker.runNext();
+        var progress=store.progress(user,essay.id(),0);
+        assertThat(progress.status()).isEqualTo("paused");
+        assertThat(progress.configurationRequired()).isFalse();
+        worker.runNext();
         verify(ai,times(3)).explainBatch(anyList(),any());
+    }
+    @Test void missingAiConfigurationIsExplicitAndRetryClearsThatRequirement() {
+        var user=user();
+        when(ai.isConfigured(any(CurrentUser.class))).thenThrow(
+                new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "AI 设置尚未完成")
+        );
+        var essay=compositions.create(user,new CreateCompositionRequest("Configure",null,"Good work."));
+
+        new GlossaryWorker(store,explanations).runNext();
+        var paused=store.progress(user,essay.id(),0);
+        assertThat(paused.status()).isEqualTo("paused");
+        assertThat(paused.configurationRequired()).isTrue();
+
+        store.retry(user,essay.id());
+        assertThat(store.progress(user,essay.id(),0).configurationRequired()).isFalse();
     }
     @Test void extraPartialWordResultDoesNotFalselyCompleteFullWordPreload() {
         var user=user();workingAi();

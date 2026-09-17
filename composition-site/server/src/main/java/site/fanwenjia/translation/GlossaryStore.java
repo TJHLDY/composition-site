@@ -53,7 +53,7 @@ public class GlossaryStore {
         entries.saveAll(copies);
         var job=previous==null?new GlossaryJob():previous;
         job.compositionId=essay.getId();job.ownerId=user.id();job.contentVersion=essay.getContentVersion();
-        job.total=targets.size();job.done=copies.size();job.attempts=0;job.lease=null;job.message=null;
+        job.total=targets.size();job.done=copies.size();job.attempts=0;job.lease=null;job.message=null;job.configurationRequired=false;
         job.status=job.done==job.total?"complete":"queued";job.nextAttempt=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);jobs.save(job);
     }
     @Transactional(readOnly=true)
@@ -86,7 +86,7 @@ public class GlossaryStore {
         var targets=words(essay.getId(),essay.getContentVersion(),essay.getContent());
         var missing=targets.stream().filter(s->!ready.contains(position(s.startOffset(),s.endOffset()))).toList();
         job.done=job.total-missing.size();
-        if(missing.isEmpty()) {job.status="complete";job.message=null;return null;}
+        if(missing.isEmpty()) {job.status="complete";job.message=null;job.configurationRequired=false;return null;}
         job.status="running";job.nextAttempt=Instant.now().plusSeconds(120);job.lease=UUID.randomUUID().toString();
         return new Work(job.compositionId,job.contentVersion,new CurrentUser(job.ownerId,"",""),job.lease,
                 missing.stream().limit(12).map(s->new ExplanationRequest(s.startOffset(),s.endOffset(),"word",s.contentVersion())).toList());
@@ -102,22 +102,23 @@ public class GlossaryStore {
             for(var row:entries.findByCompositionIdAndContentVersionOrderById(job.compositionId,job.contentVersion)) ready.add(position(row.startOffset,row.endOffset));
             job.done=(int)words(essay.getId(),essay.getContentVersion(),essay.getContent()).stream()
                     .filter(s->ready.contains(position(s.startOffset(),s.endOffset()))).count();
-            job.status=job.done>=job.total?"complete":"queued";job.attempts=0;job.message=null;job.nextAttempt=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+            job.status=job.done>=job.total?"complete":"queued";job.attempts=0;job.message=null;job.configurationRequired=false;job.nextAttempt=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         } else {
             job.attempts++;job.message=failure;
+            job.configurationRequired=configurationMissing;
             job.status=configurationMissing||job.attempts>=3?"paused":"retrying";
             job.nextAttempt=Instant.now().plusSeconds(30L*job.attempts);
         }
         job.lease=null;
     }
-    public record Progress(int contentVersion,String status,int done,int total,String message,List<StoredExplanation.View> results,long cursor) {}
+    public record Progress(int contentVersion,String status,int done,int total,String message,boolean configurationRequired,List<StoredExplanation.View> results,long cursor) {}
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public Progress progress(CurrentUser user,Long id,long after) {
         var essay=ownedLocked(user,id);
         enqueue(user,essay);
         var job=jobs.findById(id).orElseThrow();
         var rows=entries.findByCompositionIdAndContentVersionAndIdGreaterThanOrderById(id,essay.getContentVersion(),Math.max(0,after));
-        return new Progress(job.contentVersion,job.status,job.done,job.total,job.message,rows.stream().map(StoredExplanation::view).toList(),
+        return new Progress(job.contentVersion,job.status,job.done,job.total,job.message,job.configurationRequired,rows.stream().map(StoredExplanation::view).toList(),
                 rows.isEmpty()?Math.max(0,after):rows.get(rows.size()-1).id);
     }
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -125,7 +126,7 @@ public class GlossaryStore {
         var essay=ownedLocked(user,id);enqueue(user,essay);
         var job=jobs.findById(id).orElseThrow();
         if(Set.of("paused","retrying").contains(job.status)) {
-            job.status="queued";job.attempts=0;job.nextAttempt=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);job.message=null;
+            job.status="queued";job.attempts=0;job.nextAttempt=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);job.message=null;job.configurationRequired=false;
         }
     }
     private Composition ownedLocked(CurrentUser user,Long id) {

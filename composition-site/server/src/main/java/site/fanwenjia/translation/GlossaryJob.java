@@ -14,5 +14,6 @@ public class GlossaryJob {
     @Column(nullable=false) Instant nextAttempt;
     @Column(length=80) String lease;
     @Column(length=300) String message;
+    @Column(nullable=false) boolean configurationRequired;
     protected GlossaryJob() {}
 }

@@ -133,8 +133,13 @@
     return `正在预加载语境释义 · ${done} / ${total} · 可先阅读，完成后自动保存`;
   }
 
+  function preloadNeedsAiSetup(progress) {
+    return Boolean(progress && progress.status === 'paused' && progress.configurationRequired === true);
+  }
+
   return {
     preloadStatusText,
+    preloadNeedsAiSetup,
     createExplanationQueue,
     getEnglishPhraseCandidate,
     isEnglishPhraseSelection,
