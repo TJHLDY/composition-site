@@ -48,6 +48,21 @@ test('Enter resolves an exact personal phrase across types before considering AI
   assert.deepEqual(h.events.find(e => e[0] === 'result')[1], { entry: { id: 7, kind: 'phrase' } });
 });
 
+test('a guided replay bypasses a saved personal match and returns a fresh dictionary preview', async () => {
+  const calls = [];
+  const h = harness({
+    listWordbook: async () => { calls.push('personal'); return { items: [{ id: 7, kind: 'word' }] }; },
+    lookupWordbook: async body => { calls.push(body.query); return { term: 'explore', translationZh: '探索' }; }
+  });
+
+  await h.search.submit('explore', { forcePreview: true });
+
+  assert.deepEqual(calls, ['explore']);
+  assert.deepEqual(h.events.find(event => event[0] === 'result')[1], {
+    preview: { term: 'explore', translationZh: '探索' }
+  });
+});
+
 test('unknown lookup yields an unsaved preview and never creates an entry', async () => {
   const calls = [];
   const h = harness({

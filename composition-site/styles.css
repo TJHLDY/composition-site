@@ -87,6 +87,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, .essay-word:f
 }
 
 .auth-form { align-self: center; padding: clamp(32px, 5vw, 59px); }
+.auth-form-heading { position: relative; }
+.auth-reset-close { position: absolute; top: -8px; right: -8px; display: grid; width: 40px; height: 40px; padding: 0; place-items: center; color: var(--muted); font-size: 1.7rem; line-height: 1; border: 1px solid var(--rule); border-radius: 3px; background: rgba(251,250,245,.88); }
+.auth-reset-close:hover { color: var(--moss); border-color: rgba(33,77,61,.42); background: var(--sheet); }
 .auth-form-heading h2 { margin: 0 0 10px; font-size: clamp(1.9rem, 3.3vw, 2.55rem); line-height: 1.16; }
 .auth-form-heading p:last-child { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.72; }
 .auth-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; margin-top: 28px; padding: 3px; background: rgba(229,223,207,.68); border: 1px solid rgba(33,77,61,.14); border-radius: 3px; }

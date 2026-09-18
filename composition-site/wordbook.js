@@ -50,15 +50,17 @@
         const current = scope.start('search');
         onBusy('lookup');
         try {
-          const personal = await api.listWordbook({ exact: query.trim(), page: 0, size: 60 });
-          if (!current()) return;
-          if (personal.items?.length) {
-            onResult({ entry: personal.items[0] });
-          } else {
-            assertAiLength(query.trim());
-            const preview = await api.lookupWordbook({ query: query.trim() });
-            if (current()) onResult({ preview });
+          if (!event.forcePreview) {
+            const personal = await api.listWordbook({ exact: query.trim(), page: 0, size: 60 });
+            if (!current()) return;
+            if (personal.items?.length) {
+              onResult({ entry: personal.items[0] });
+              return;
+            }
           }
+          assertAiLength(query.trim());
+          const preview = await api.lookupWordbook({ query: query.trim() });
+          if (current()) onResult({ preview });
         } catch (error) { if (current()) onError(error); }
         finally { if (current()) onBusy(false); }
       }
@@ -145,6 +147,7 @@
     let editorDictionary = null;
     let generated = null;
     let composing = false;
+    let guidedForcePreview = false;
     let compositionEndedAt = 0;
     let editingId = null;
     let editorSaved = false;
@@ -515,7 +518,9 @@
       listScope.reset();
       detail.innerHTML = '<p class="wb-loading" role="status">先查找你的收藏，再查询新的表达…</p>';
       root.classList.add('wb-show-detail');
-      void search.submit(query.value);
+      const forcePreview = guidedForcePreview;
+      guidedForcePreview = false;
+      void search.submit(query.value, { forcePreview });
     }
 
     const search = createSearchController({
@@ -523,7 +528,7 @@
       onList(data) { if (active) { page = 0; renderList(data); status.textContent = ''; } },
       onResult(result) {
         if (!active) return;
-        if (result.entry) { void openEntry(result.entry.id, result.entry.kind); }
+        if (result.entry) void openEntry(result.entry.id, result.entry.kind);
         else {
           clearContent();
           preview = result.preview;
@@ -753,15 +758,17 @@
         items = [];
         query.value = '';
         composing = false;
+        guidedForcePreview = false;
         clearContent();
         editorForm.reset();
         status.textContent = '';
         renderList({ items: [], total: 0, wordCount: 0, phraseCount: 0 });
         emptyDetail();
       },
-      beginGuidedSearch(defaultTerm = 'explore') {
+      beginGuidedSearch(defaultTerm = 'explore', options = {}) {
         if (!active) return;
-        if (!query.value.trim()) query.value = defaultTerm;
+        if (options.forcePreview || !query.value.trim()) query.value = defaultTerm;
+        guidedForcePreview = options.forcePreview === true;
         query.focus({ preventScroll: true });
       },
       openEntry(id) {

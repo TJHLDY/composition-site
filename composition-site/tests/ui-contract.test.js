@@ -53,6 +53,7 @@ const styles = read('styles.css');
   'id="auth-code"',
   'id="send-code-button"',
   'id="forgot-password-link"',
+  'id="cancel-password-reset"',
   'id="remember-me"',
   'id="logout-button"',
   'id="learning-guide-button"',
@@ -112,6 +113,7 @@ assert.ok(
 assert.ok(script.includes('requestVerificationCode'), 'The code request button needs its own busy/countdown handling.');
 assert.ok(script.includes('重新发送'), 'The send-code button must show a resend cooldown.');
 assert.ok(script.includes("'reset'"), 'The auth form must support the forgot-password reset mode.');
+assert.ok(script.includes('cancelPasswordReset'), 'The password-reset view must provide a way back to login.');
 assert.ok(script.includes('newPassword'), 'The reset flow must submit the new password through the API client.');
 assert.ok(script.includes('data-delete-essay'), 'Each composition list item must expose a delete action.');
 assert.ok(script.includes('范文及本篇摘录都会一起删除'), 'Deleting a composition must clearly warn that its notes are removed too.');

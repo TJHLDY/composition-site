@@ -58,6 +58,9 @@
     const type = event.type;
     if (type === 'close') return { ...current, step: 'wordbook' };
     if (type === 'skip') return { ...current, step: 'skipped' };
+    if (type === 'restart-wordbook') {
+      return { ...current, step: 'wordbook', wordbookId: null, compositionId: null };
+    }
 
     if (current.step === 'wordbook') {
       if (type === 'resume-saved-wordbook' && current.wordbookId) {
@@ -95,24 +98,36 @@
   function guideMarkup() {
     return `
       <section id="onboarding-layer" class="onboarding-layer" hidden aria-label="VocabNote 新手教程" data-step="wordbook">
-        <div class="onboarding-scrim" aria-hidden="true"></div>
+        <div class="onboarding-scrim" data-onboarding-scrim="top" aria-hidden="true"></div>
+        <div class="onboarding-scrim" data-onboarding-scrim="right" aria-hidden="true"></div>
+        <div class="onboarding-scrim" data-onboarding-scrim="bottom" aria-hidden="true"></div>
+        <div class="onboarding-scrim" data-onboarding-scrim="left" aria-hidden="true"></div>
         <div class="onboarding-target-ring" aria-hidden="true"></div>
-        <aside class="onboarding-card" role="region" aria-live="polite" aria-labelledby="onboarding-title">
-          <div class="onboarding-card-topline">
+        <p class="onboarding-target-note" id="onboarding-target-note" role="status" hidden><span aria-hidden="true">↳</span><span data-onboarding-cue></span></p>
+        <p id="onboarding-scroll-hint" class="onboarding-scroll-hint" role="status" hidden><span aria-hidden="true">↓</span><span data-onboarding-scroll-text>继续向下，点击收录</span></p>
+        <aside class="onboarding-guidebar onboarding-card" role="region" aria-live="polite" aria-labelledby="onboarding-title">
+          <div class="onboarding-guidebar-main">
             <p class="onboarding-eyebrow" id="onboarding-eyebrow"></p>
-            <button class="onboarding-skip" type="button" data-onboarding-action="skip">跳过教程</button>
+            <h2 id="onboarding-title"></h2>
+            <p id="onboarding-copy"></p>
           </div>
-          <div class="onboarding-progress" role="list" aria-label="教程进度">
-            <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 1 步"></span>
-            <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 2 步"></span>
-            <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 3 步"></span>
-            <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 4 步"></span>
-            <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="完成"></span>
+          <div class="onboarding-guidebar-controls">
+            <button class="onboarding-details-toggle" type="button" data-onboarding-action="toggle-details" aria-expanded="false" aria-controls="onboarding-guide-details">说明</button>
+            <button class="onboarding-skip" type="button" data-onboarding-action="skip">跳过</button>
           </div>
-          <h2 id="onboarding-title"></h2>
-          <p id="onboarding-copy"></p>
-          <p class="onboarding-status" id="onboarding-status" role="status"></p>
-          <div class="onboarding-card-actions" id="onboarding-card-actions"></div>
+          <div class="onboarding-progress-row" aria-label="教程进度">
+            <div class="onboarding-progress" role="list">
+              <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 1 步"></span>
+              <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 2 步"></span>
+              <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 3 步"></span>
+              <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="第 4 步"></span>
+              <span class="onboarding-progress-marker" data-onboarding-progress role="listitem" aria-label="完成"></span>
+            </div>
+          </div>
+          <div class="onboarding-guide-details" id="onboarding-guide-details">
+            <p class="onboarding-status" id="onboarding-status" role="status"></p>
+            <div class="onboarding-card-actions" id="onboarding-card-actions"></div>
+          </div>
         </aside>
       </section>`;
   }
@@ -133,7 +148,10 @@
 
   function defaultActions(state) {
     if (state.step === 'wordbook' && state.wordbookId) {
-      return [{ action: 'resume-wordbook', label: '继续使用已收录内容', tone: 'secondary' }];
+      return [
+        { action: 'resume-wordbook', label: '继续上次教程', tone: 'primary' },
+        { action: 'restart-wordbook', label: '重新开始教程', tone: 'secondary' }
+      ];
     }
     if (state.step === 'composition' && state.compositionId) {
       return [{ action: 'resume-composition', label: '继续使用已保存范文', tone: 'secondary' }];
@@ -154,7 +172,14 @@
 
     const layer = document.querySelector('#onboarding-layer');
     const ring = layer.querySelector('.onboarding-target-ring');
-    const scrim = layer.querySelector('.onboarding-scrim');
+    const guidebar = layer.querySelector('.onboarding-guidebar');
+    const targetNote = layer.querySelector('#onboarding-target-note');
+    const cue = layer.querySelector('[data-onboarding-cue]');
+    const scrollHint = layer.querySelector('#onboarding-scroll-hint');
+    const scrollHintText = layer.querySelector('[data-onboarding-scroll-text]');
+    const scrims = Object.fromEntries(
+      [...layer.querySelectorAll('[data-onboarding-scrim]')].map(scrim => [scrim.dataset.onboardingScrim, scrim])
+    );
     const eyebrow = layer.querySelector('#onboarding-eyebrow');
     const title = layer.querySelector('#onboarding-title');
     const copy = layer.querySelector('#onboarding-copy');
@@ -164,10 +189,14 @@
 
     let state = null;
     let active = false;
+    let locked = true;
     let activeTarget = null;
+    let allowedTargets = [];
     let instruction = {};
     let actionBusy = false;
     let animationFrame = null;
+    let visibilityFrame = null;
+    let guidebarExpanded = false;
 
     function snapshot() {
       return state ? { ...state } : null;
@@ -183,56 +212,124 @@
       if (activeTarget) activeTarget.classList.remove('onboarding-target-active');
       activeTarget = null;
       ring.hidden = true;
+      targetNote.hidden = true;
       ring.removeAttribute('style');
-      layer.removeAttribute('data-card-position');
       layer.dataset.keyboardOpen = 'false';
-      layer.style.removeProperty('--onboarding-card-bottom');
-      layer.style.removeProperty('--onboarding-keyboard-offset');
+      layer.removeAttribute('data-guidebar-placement');
+      layer.style.removeProperty('--onboarding-guidebar-top');
+      hideScrimPanels();
       moveLayerToTargetContext(null);
     }
 
     function detach() {
       clearTarget();
+      allowedTargets = [];
     }
 
-    function positionCardForViewport() {
-      const visualViewport = window.visualViewport;
-      const focused = document.activeElement;
-      const targetRect = activeTarget?.isConnected ? activeTarget.getBoundingClientRect() : null;
-      const viewportHeight = visualViewport?.height || window.innerHeight;
-      const keyboardOpen = Boolean(
-        visualViewport && focused && activeTarget && activeTarget.contains(focused)
-        && visualViewport.height < window.innerHeight - 120
-      );
-      layer.dataset.keyboardOpen = String(keyboardOpen);
-      if (keyboardOpen && visualViewport) {
-        layer.removeAttribute('data-card-position');
-        layer.style.removeProperty('--onboarding-card-bottom');
-        const offset = Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
-        layer.style.setProperty('--onboarding-keyboard-offset', `${Math.ceil(offset)}px`);
+    function setScrimPanel(name, left, top, width, height) {
+      const panel = scrims[name];
+      if (!panel) return;
+      const visible = width > 0 && height > 0;
+      panel.hidden = !visible;
+      if (!visible) return;
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.top = `${Math.round(top)}px`;
+      panel.style.width = `${Math.ceil(width)}px`;
+      panel.style.height = `${Math.ceil(height)}px`;
+    }
+
+    function positionScrimPanels(rect) {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      if (!rect) {
+        setScrimPanel('top', 0, 0, viewportWidth, viewportHeight);
+        setScrimPanel('right', 0, 0, 0, 0);
+        setScrimPanel('bottom', 0, 0, 0, 0);
+        setScrimPanel('left', 0, 0, 0, 0);
         return;
       }
-      layer.style.removeProperty('--onboarding-keyboard-offset');
-      if (!targetRect || targetRect.top < viewportHeight * .56) {
-        layer.removeAttribute('data-card-position');
-        layer.style.removeProperty('--onboarding-card-bottom');
+
+      const left = Math.max(0, Math.min(viewportWidth, rect.left));
+      const top = Math.max(0, Math.min(viewportHeight, rect.top));
+      const right = Math.max(left, Math.min(viewportWidth, rect.right));
+      const bottom = Math.max(top, Math.min(viewportHeight, rect.bottom));
+      setScrimPanel('top', 0, 0, viewportWidth, top);
+      setScrimPanel('right', right, top, viewportWidth - right, bottom - top);
+      setScrimPanel('bottom', 0, bottom, viewportWidth, viewportHeight - bottom);
+      setScrimPanel('left', 0, top, left, bottom - top);
+    }
+
+    function hideScrimPanels() {
+      Object.values(scrims).forEach(panel => { panel.hidden = true; });
+    }
+
+    function renderGuidebar() {
+      const expanded = guidebarExpanded || actions.childElementCount > 0;
+      layer.dataset.guidebarExpanded = String(expanded);
+      const toggle = guidebar.querySelector('[data-onboarding-action="toggle-details"]');
+      toggle.setAttribute('aria-expanded', String(expanded));
+      toggle.textContent = expanded ? '收起' : '说明';
+    }
+
+    function positionGuidebarForTarget(rect) {
+      layer.removeAttribute('data-guidebar-placement');
+      layer.style.removeProperty('--onboarding-guidebar-top');
+      const guidebarRect = guidebar.getBoundingClientRect();
+      const overlapsHorizontally = rect.left < guidebarRect.right && rect.right > guidebarRect.left;
+      const occupiesHeader = rect.top < guidebarRect.bottom + 12 && rect.bottom <= 140;
+      if (occupiesHeader && overlapsHorizontally) {
+        layer.dataset.guidebarPlacement = 'below-target';
+        layer.style.setProperty('--onboarding-guidebar-top', `${Math.ceil(rect.bottom + 12)}px`);
+      }
+    }
+
+    function positionTargetNote(rect) {
+      if (!rect || !cue.textContent) {
+        targetNote.hidden = true;
         return;
       }
-      const bottomOffset = Math.max(12, window.innerHeight - targetRect.top + 14);
-      layer.setAttribute('data-card-position', 'above-target');
-      layer.style.setProperty('--onboarding-card-bottom', `${Math.ceil(bottomOffset)}px`);
+      if (layer.dataset.guidebarPlacement === 'below-target') {
+        targetNote.hidden = true;
+        return;
+      }
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const noteWidth = Math.min(220, Math.max(120, rect.width));
+      const left = Math.max(12, Math.min(viewportWidth - noteWidth - 12, rect.left));
+      const below = rect.bottom + 12;
+      const top = below + 36 >= viewportHeight ? Math.max(12, rect.top - 40) : below;
+      targetNote.hidden = false;
+      targetNote.style.width = `${Math.round(noteWidth)}px`;
+      targetNote.style.left = `${Math.round(left)}px`;
+      targetNote.style.top = `${Math.round(top)}px`;
+    }
+
+    function ensureTargetVisible() {
+      if (!active || !activeTarget?.isConnected) return;
+      if (layer.dataset.guidebarPlacement === 'below-target') return;
+      const targetRect = activeTarget.getBoundingClientRect();
+      const guidebarRect = guidebar.getBoundingClientRect();
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const blockedAtTop = targetRect.top < guidebarRect.bottom + 18;
+      const outsideBottom = targetRect.bottom > viewportHeight - 18;
+      if ((blockedAtTop || outsideBottom) && typeof activeTarget.scrollIntoView === 'function') {
+        activeTarget.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+      }
     }
 
     function positionTarget() {
       if (!active || !activeTarget || !activeTarget.isConnected) {
         ring.hidden = true;
-        positionCardForViewport();
+        targetNote.hidden = true;
+        hideScrimPanels();
         return;
       }
       moveLayerToTargetContext(activeTarget);
       const rect = activeTarget.getBoundingClientRect();
       if (!rect.width || !rect.height) {
         ring.hidden = true;
+        targetNote.hidden = true;
+        hideScrimPanels();
         return;
       }
       const padding = 7;
@@ -243,7 +340,9 @@
       ring.style.height = `${Math.ceil(height)}px`;
       ring.style.left = `${Math.round(rect.left + rect.width / 2 - width / 2)}px`;
       ring.style.top = `${Math.round(rect.top + rect.height / 2 - height / 2)}px`;
-      positionCardForViewport();
+      hideScrimPanels();
+      positionGuidebarForTarget(rect);
+      positionTargetNote(rect);
     }
 
     function schedulePosition() {
@@ -264,6 +363,16 @@
       activeTarget = next;
       if (activeTarget) activeTarget.classList.add('onboarding-target-active');
       schedulePosition();
+      if (visibilityFrame !== null) window.cancelAnimationFrame?.(visibilityFrame);
+      visibilityFrame = window.requestAnimationFrame?.(() => {
+        visibilityFrame = null;
+        ensureTargetVisible();
+      }) ?? window.setTimeout(() => ensureTargetVisible(), 0);
+    }
+
+    function setAllowedTargets(targets = []) {
+      const values = Array.isArray(targets) ? targets : [targets];
+      allowedTargets = values.map(target => resolveElement(target, document)).filter(Boolean);
     }
 
     function renderActions(nextActions) {
@@ -281,6 +390,7 @@
     function renderInstruction() {
       if (!state) return;
       const content = { ...STEP_COPY[state.step], ...instruction };
+      const stepChanged = layer.dataset.step && layer.dataset.step !== state.step;
       layer.dataset.step = state.step;
       eyebrow.textContent = content.eyebrow || '';
       title.textContent = content.title || '';
@@ -290,21 +400,38 @@
         marker.classList.toggle('is-complete', index < guideStepIndex(state.step));
       });
       renderActions(content.actions || defaultActions(state));
+      cue.textContent = content.cue || content.title || '';
+      renderGuidebar();
+      // 步骤切换时触发内容淡入动画
+      if (stepChanged) {
+        const main = guidebar.querySelector('.onboarding-guidebar-main');
+        if (main) {
+          main.classList.remove('is-transitioning');
+          void main.offsetWidth; // 强制回流，重置动画
+          main.classList.add('is-transitioning');
+        }
+      }
     }
 
     function setStatus(message = '') {
       status.textContent = message;
+      if (message) guidebarExpanded = true;
+      renderGuidebar();
+    }
+
+    function setScrollHint(visible, message = '继续向下，点击收录') {
+      scrollHint.hidden = !visible;
+      if (visible) scrollHintText.textContent = message;
     }
 
     function canInteract(element) {
       if (!active) return true;
+      if (!locked) return true; // 非锁定模式（如预加载阶段）：允许自由操作
       if (!isElement(element)) return false;
       if (layer.contains(element) && element.closest('[data-onboarding-action]')) return true;
       if (element.closest('[data-onboarding-system-close]')) return true;
-      return Boolean(activeTarget && (
-        activeTarget === element
-        || activeTarget.contains(element)
-        || element.contains(activeTarget)
+      return [activeTarget, ...allowedTargets].filter(Boolean).some(target => (
+        target === element || target.contains(element) || element.contains(target)
       ));
     }
 
@@ -322,14 +449,14 @@
     async function skip() {
       if (!active || actionBusy) return;
       actionBusy = true;
-      setStatus('正在跳过教程…');
       try {
-        if (state.mode === 'auto' && typeof options.onSkip === 'function') await options.onSkip(snapshot());
         state = reduceGuide(state, { type: 'skip' });
         deactivate();
         if (typeof options.onSkipped === 'function') options.onSkipped(snapshot());
-      } catch (error) {
-        setStatus(error?.message || '暂时无法跳过教程，请稍后重试。');
+        // 后台静默同步，失败不影响用户已关闭的引导
+        if (state.mode === 'auto' && typeof options.onSkip === 'function') {
+          options.onSkip(snapshot()).catch(err => console.warn('Onboarding skip sync failed:', err));
+        }
       } finally {
         actionBusy = false;
       }
@@ -337,9 +464,12 @@
 
     function deactivate({ keepTip = false } = {}) {
       active = false;
+      locked = true;
       document.body.classList.remove('onboarding-active');
       clearTarget();
-      scrim.hidden = keepTip;
+      allowedTargets = [];
+      setScrollHint(false);
+      hideScrimPanels();
       layer.classList.toggle('onboarding-tip-only', keepTip);
       layer.hidden = !keepTip;
       if (!keepTip) setStatus('');
@@ -352,14 +482,17 @@
       state = createGuideState(initialView, { mode: settings.mode });
       if (STEPS.includes(settings.step)) state = { ...state, step: settings.step };
       instruction = settings.instruction || {};
+      guidebarExpanded = Boolean(instruction.expanded);
       active = true;
       layer.hidden = false;
       layer.classList.remove('onboarding-tip-only');
-      scrim.hidden = false;
+      hideScrimPanels();
+      setScrollHint(false);
       document.body.classList.add('onboarding-active');
       renderInstruction();
       setStatus(settings.status || '');
       setTarget(settings.target || null);
+      setAllowedTargets(settings.interactiveTargets);
       return snapshot();
     }
 
@@ -375,18 +508,22 @@
       if (!state) return null;
       state = reduceGuide(state, event);
       instruction = settings.instruction || {};
+      guidebarExpanded = Boolean(instruction.expanded);
       renderInstruction();
       setStatus(settings.status || '');
       if (Object.hasOwn(settings, 'target')) setTarget(settings.target);
+      if (Object.hasOwn(settings, 'interactiveTargets')) setAllowedTargets(settings.interactiveTargets);
       if (typeof options.onStateChange === 'function') options.onStateChange(snapshot(), event);
       return snapshot();
     }
 
-    function showInstruction(nextInstruction = {}, target) {
+    function showInstruction(nextInstruction = {}, target, settings = {}) {
       instruction = nextInstruction;
+      guidebarExpanded = Boolean(instruction.expanded);
       renderInstruction();
       if (arguments.length > 1) setTarget(target);
       else schedulePosition();
+      setAllowedTargets(settings.interactiveTargets);
     }
 
     function showCompletionTip(nextInstruction = {}) {
@@ -413,6 +550,13 @@
         void skip();
         return;
       }
+      if (action === 'toggle-details') {
+        guidebarExpanded = !guidebarExpanded;
+        renderGuidebar();
+        ensureTargetVisible();
+        schedulePosition();
+        return;
+      }
       if (action === 'dismiss-tip') {
         deactivate();
         return;
@@ -436,7 +580,9 @@
       dispatch,
       getState: snapshot,
       setStatus,
+      setScrollHint,
       setTarget,
+      setLocked(value) { locked = Boolean(value); },
       detach,
       showInstruction,
       showCompletionTip,

@@ -23,3 +23,7 @@ test('choosing a dictionary sense is observable but collection remains a separat
   assert.match(selectionHandler,/vocabnote:wordbook-meaning-selected/);
   assert.doesNotMatch(selectionHandler,/vocabnote:wordbook-saved/);
 });
+
+test('guided lookup can bypass personal matches when replaying the full tutorial',()=>{
+  assert.match(source,/forcePreview/);
+});

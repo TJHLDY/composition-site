@@ -43,6 +43,7 @@
     authPasswordToggle: document.querySelector('#auth-password-toggle'),
     authPasswordLabel: document.querySelector('#auth-password-label'),
     forgotPasswordLink: document.querySelector('#forgot-password-link'),
+    cancelPasswordReset: document.querySelector('#cancel-password-reset'),
     rememberMe: document.querySelector('#remember-me'),
     rememberMeField: document.querySelector('#remember-me-field'),
     authSubmitButton: document.querySelector('#auth-submit-button'),
@@ -154,6 +155,7 @@
   let temporaryAiGuide = false;
   let latestPreloadProgress = null;
   let activePreloadAiKey = null;
+  let wordbookSaveScrollCleanup = null;
 
   function normalizeAnnotation(annotation) {
     return {
@@ -472,6 +474,7 @@
     dom.authCodeField.hidden = !needsCode;
     dom.authCode.required = needsCode;
     dom.forgotPasswordLink.hidden = state.authMode !== 'login';
+    dom.cancelPasswordReset.hidden = !isReset;
     dom.rememberMeField.hidden = isReset;
     dom.authPassword.autocomplete = state.authMode === 'login' ? 'current-password' : 'new-password';
     dom.authPasswordLabel.innerHTML = isReset ? '新密码 <em>至少 8 位</em>' : '密码 <em>至少 8 位</em>';
@@ -490,6 +493,13 @@
     dom.authCodeHint.textContent = '';
     if (resetForm) dom.authForm.reset();
     authPasswordVisibility.reset();
+  }
+
+  function cancelPasswordReset() {
+    const email = dom.authEmail.value.trim();
+    setAuthMode('login');
+    if (email) dom.authEmail.value = email;
+    window.setTimeout(() => dom.authPassword.focus(), 0);
   }
 
   function stopCodeCountdown() {
@@ -672,27 +682,31 @@
       return {
         eyebrow: '第 1 步 · 收下一条表达',
         title: '先查一个真正想记住的词',
-        copy: '搜索框里已经放入 explore。你可以直接查它，也可以改成自己的单词；按回车后再选择一个释义。'
+        copy: '搜索框里已经放入 explore。你可以直接查它，也可以改成自己的单词；按回车后再选择一个释义。',
+        cue: '输入词或短语后查词'
       };
     }
     if (step === 'composition') {
       return {
         eyebrow: '第 2 步 · 留下一篇范文',
         title: '让单词回到语境里',
-        copy: '点击加号，保存一篇范文。示例题目和内容都可以改成你的材料。'
+        copy: '点击加号，保存一篇范文。示例题目和内容都可以改成你的材料。',
+        cue: '点击这里新建范文'
       };
     }
     if (step === 'preload') {
       return {
         eyebrow: '第 3 步 · 准备阅读',
         title: '正在预加载语境释义',
-        copy: '范文已保存，词义会自动写入这篇范文。若需要 AI 配置，会在这里继续指引你。'
+        copy: '范文已保存，词义会自动写入这篇范文。若需要 AI 配置，会在这里继续指引你。',
+        cue: '等待预加载完成'
       };
     }
     return {
       eyebrow: '第 4 步 · 留下自己的理解',
       title: '点一个已准备好的单词',
-      copy: '打开单词卡，补充释义或记忆提示，再保存到本篇笔记。'
+      copy: '打开单词卡，补充释义或记忆提示，再保存到本篇笔记。',
+      cue: '点击这个单词继续'
     };
   }
 
@@ -700,12 +714,65 @@
     return {
       eyebrow: 'AI 配置 · 完成后继续',
       title: '先测试，再保存',
-      copy: '选择服务商并填写 API Key，先点击“测试连接”。测试成功后，才能保存并继续刚才的操作。'
+      copy: '选择服务商并填写 API Key，先点击“测试连接”。测试成功后，才能保存并继续刚才的操作。',
+      cue: '填写 Key 后先测试'
     };
   }
 
   function markOnboardingCloseControls(selector, allowed) {
     document.querySelectorAll(selector).forEach(control => onboarding.setSystemClose(control, allowed));
+  }
+
+  function clearWordbookSaveScrollCue() {
+    wordbookSaveScrollCleanup?.();
+    wordbookSaveScrollCleanup = null;
+    onboarding.setScrollHint(false);
+  }
+
+  function guideWordbookSaveButton(saveButton) {
+    clearWordbookSaveScrollCue();
+    const editor = document.querySelector('#wb-editor');
+    if (!editor || !saveButton) return;
+
+    let frame = null;
+    let autoScrolling = true;
+    const updateScrollHint = () => {
+      if (autoScrolling) return;
+      const buttonRect = saveButton.getBoundingClientRect();
+      const dialogRect = editor.getBoundingClientRect();
+      onboarding.setScrollHint(buttonRect.top > dialogRect.bottom - 12);
+    };
+    const stop = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      editor.removeEventListener('scroll', updateScrollHint);
+      onboarding.setScrollHint(false);
+    };
+    wordbookSaveScrollCleanup = stop;
+    editor.addEventListener('scroll', updateScrollHint, { passive: true });
+
+    const dialogRect = editor.getBoundingClientRect();
+    const buttonRect = saveButton.getBoundingClientRect();
+    const startTop = editor.scrollTop;
+    const targetTop = Math.max(0, Math.min(
+      editor.scrollHeight - editor.clientHeight,
+      startTop + buttonRect.bottom - dialogRect.bottom + 24
+    ));
+    const distance = targetTop - startTop;
+    const duration = 900;
+    const startedAt = performance.now();
+    const animate = now => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      editor.scrollTop = startTop + distance * eased;
+      if (progress < 1) {
+        frame = requestAnimationFrame(animate);
+        return;
+      }
+      frame = null;
+      autoScrolling = false;
+      updateScrollHint();
+    };
+    frame = requestAnimationFrame(animate);
   }
 
   function startWordbookGuideStage() {
@@ -715,7 +782,7 @@
       onboarding.showInstruction({
         eyebrow: '继续上次的教程',
         title: '之前收录的内容还在',
-        copy: '继续使用它，就不会重复创建一条新的词条。'
+        copy: '继续上次：直接进入下一步，不会新建词条。重新开始：会查新词，两者都不会删除已有词条。'
       }, null);
       return;
     }
@@ -739,6 +806,7 @@
 
   function startPreloadGuideStage() {
     if (!guideAt('preload')) return;
+    onboarding.setLocked(false); // 等待预加载时解除锁定，用户可自由浏览
     onboarding.showInstruction(guideInstruction('preload'), '#preload-status');
   }
 
@@ -836,7 +904,7 @@
       }
     });
     if (tutorial && coreGuide && onboarding.isActive()) {
-      onboarding.showInstruction(aiGuideInstruction(), '#ai-settings-form');
+      onboarding.showInstruction({ ...aiGuideInstruction(), cardPlacement: 'above' }, '#ai-key');
       onboarding.setSystemClose('#ai-settings-close', true);
     }
     const opened = await opening;
@@ -848,7 +916,7 @@
         resetResources: true,
         step: 'preload',
         instruction: aiGuideInstruction(),
-        target: '#ai-settings-form'
+        target: '#ai-key'
       });
     }
     onboarding.setSystemClose('#ai-settings-close', true);
@@ -937,6 +1005,7 @@
         window.setTimeout(() => replayLatestPreloadProgress(), 0);
       }
       if (type === 'preload') {
+        onboarding.setLocked(true); // 进入标注步骤时恢复引导锁定
         onboarding.dispatch({ type: 'preload-ready', compositionId: detail.compositionId });
         startAnnotationGuideStage(detail.target);
       }
@@ -959,6 +1028,14 @@
       return;
     }
     if (!guide) return;
+    if (action === 'restart-wordbook' && guide.wordbookId) {
+      onboarding.dispatch({ type: 'restart-wordbook' });
+      switchView('wordbook');
+      wordbook.beginGuidedSearch('explore', { forcePreview: true });
+      onboarding.showInstruction(guideInstruction('wordbook'), '#wb-search-form');
+      showToast('已从第 1 步重新开始，之前收录的内容会保留。');
+      return;
+    }
     if (action === 'resume-wordbook' && guide.wordbookId) {
       onboarding.dispatch({ type: 'resume-saved-wordbook' });
       switchView('compositions');
@@ -981,30 +1058,42 @@
       onboarding.showInstruction({
         eyebrow: '第 1 步 · 选择要记的意思',
         title: '先打开收录页',
-        copy: '这是一条真实的查询结果。点击“收录到单词本”，再从词典义项里选择一个最适合的解释。'
+        copy: '这是一条真实的查询结果。点击“收录到单词本”，再从词典义项里选择一个最适合的解释。',
+        cue: '点击收录到单词本'
       }, '#wordbook-view [data-action="collect"]');
     });
     document.addEventListener('vocabnote:wordbook-editor-opened', (event) => {
       const guide = activeGuideState();
       if (!guide || guide.step !== 'wordbook' || event.detail?.editing) return;
       markOnboardingCloseControls('#wb-editor [data-wb-close]', true);
-      const target = document.querySelector('#wb-editor [data-meaning-choice]') || document.querySelector('#wb-translation');
+      const target = document.querySelector('#wb-editor .wb-meaning-picker fieldset') || document.querySelector('#wb-translation');
       onboarding.showInstruction({
         eyebrow: '第 1 步 · 选择一个释义',
         title: '用你认同的意思收录',
-        copy: '勾选一个词典义项。选择本身不会完成教程，确认后还要点击“收录到单词本”。'
-      }, target);
+        copy: '从这个词性下任选一个或多个义项。选择本身不会完成教程，确认后还要点击“收录到单词本”。',
+        cardPlacement: 'above',
+        cue: '可多选，选完再收录'
+      }, target, { interactiveTargets: ['#wb-editor .wb-meaning-picker', '#wb-save'] });
     });
     document.addEventListener('vocabnote:wordbook-meaning-selected', (event) => {
       const guide = activeGuideState();
-      if (!guide || guide.step !== 'wordbook' || Number(event.detail?.count) < 1) return;
+      if (!guide || guide.step !== 'wordbook') return;
+      if (Number(event.detail?.count) < 1) {
+        clearWordbookSaveScrollCue();
+        return;
+      }
+      const saveButton = document.querySelector('#wb-save');
       onboarding.showInstruction({
         eyebrow: '第 1 步 · 保存到单词本',
         title: '现在把它留下来',
-        copy: '你选中的释义会写入词条。点击收录，成功保存后才会进入下一步。'
-      }, '#wb-save');
+        copy: '你选中的释义会写入词条。点击收录，成功保存后才会进入下一步。',
+        cardPlacement: 'above',
+        cue: '点击收录，完成这一步'
+      }, saveButton || '#wb-save', { interactiveTargets: ['#wb-editor .wb-meaning-picker', '#wb-save'] });
+      guideWordbookSaveButton(saveButton);
     });
     document.addEventListener('vocabnote:wordbook-editor-closed', (event) => {
+      clearWordbookSaveScrollCue();
       markOnboardingCloseControls('#wb-editor [data-wb-close]', false);
       if (!event.detail?.saved && guideAt('wordbook')) onboarding.close();
     });
@@ -1016,7 +1105,8 @@
       onboarding.showInstruction({
         eyebrow: '第 4 步 · 打开收录页',
         title: '继续收录这个单词',
-        copy: '这条语境释义已经准备好了。点击“收录单词”，写下自己的理解。'
+        copy: '这条语境释义已经准备好了。点击“收录单词”，写下自己的理解。',
+        cue: '点击收录单词'
       }, event.detail?.target || dom.mobileWordRecord);
     });
     document.addEventListener('vocabnote:annotation-saved', (event) => void advanceCoreGuide('annotation', event.detail));
@@ -1161,6 +1251,7 @@
   let editingEssay = null;
   function openEssayDialog() {
     editingEssay = null;
+    const submitButton = dom.essayForm.querySelector('button[type="submit"]');
     document.querySelector('#essay-dialog-title').textContent = '收进一篇范文';
     dom.essayForm.reset();
     dom.essayFormError.textContent = '';
@@ -1175,11 +1266,17 @@
     if (guidedComposition) {
       onboarding.showInstruction({
         eyebrow: '第 2 步 · 保存一篇范文',
-        title: '把示例改成你的材料也可以',
-        copy: '题目和正文都已放入可编辑示例。确认后保存，系统会立即为这篇范文预加载语境释义。'
-      }, dom.essayForm);
+        title: '确认后保存这篇范文',
+        copy: '示例题目和正文已经写好；需要时可以直接修改。确认后点击“保存范文”，系统会立即预加载语境释义。',
+        cardPlacement: 'above',
+        cue: '确认后点击保存范文'
+      }, submitButton, {
+        interactiveTargets: [dom.essayForm]
+      });
     }
-    window.setTimeout(() => dom.essayTitle.focus(), 0);
+    window.setTimeout(() => {
+      (guidedComposition ? submitButton : dom.essayTitle).focus({ preventScroll: true });
+    }, 0);
   }
 
   function openEditEssayDialog() {
@@ -1488,8 +1585,10 @@
       onboarding.showInstruction({
         eyebrow: '第 4 步 · 保存一条笔记',
         title: '写下你的理解',
-        copy: '可以使用自动填入的释义，也可以改成自己的表达。至少填写一项后，保存到本篇笔记。'
-      }, dom.noteForm);
+        copy: '可以使用自动填入的释义，也可以改成自己的表达。至少填写一项后，保存到本篇笔记。',
+        cardPlacement: 'above',
+        cue: '填写释义或记忆提示'
+      }, dom.noteTranslation);
     }
     window.setTimeout(() => dom.noteTranslation.focus(), 0);
     if (!existing || !existing.translationZh) {
@@ -1873,6 +1972,7 @@
       if (email) dom.authEmail.value = email;
       window.setTimeout(() => (dom.authEmail.value ? dom.authCode : dom.authEmail).focus(), 0);
     });
+    dom.cancelPasswordReset.addEventListener('click', cancelPasswordReset);
     dom.sendCodeButton.addEventListener('click', () => void requestVerificationCode());
     dom.authPasswordToggle.addEventListener('click', () => authPasswordVisibility.toggle());
     dom.authForm.addEventListener('submit', (event) => void submitAuth(event));

@@ -75,6 +75,31 @@ test('a restarted guide reuses its saved resources without creating replacements
   assert.equal(reduceGuide(afterComposition, { type: 'wordbook-saved', entryId: 99 }).wordbookId, '12');
 });
 
+test('an interrupted tutorial can restart from the first step without discarding its saved wordbook entry', () => {
+  const resumed = createGuideState({
+    coreStatus: 'in_progress',
+    autoStart: true,
+    tutorialWordbookId: 12,
+    tutorialCompositionId: 34
+  });
+
+  const restarted = reduceGuide(resumed, { type: 'restart-wordbook' });
+  assert.equal(restarted.step, 'wordbook');
+  assert.equal(restarted.wordbookId, null);
+  assert.equal(restarted.compositionId, null);
+  assert.match(read('onboarding.js'), /restart-wordbook/);
+  assert.match(read('app.js'), /action === 'restart-wordbook'/);
+});
+
+test('restarting forces a fresh dictionary preview instead of skipping a saved term', () => {
+  const app = read('app.js');
+  const wordbook = read('wordbook.js');
+
+  assert.match(wordbook, /forcePreview/);
+  assert.match(app, /wordbook\.beginGuidedSearch\('explore', \{ forcePreview: true \}\)/);
+  assert.doesNotMatch(app, /vocabnote:wordbook-existing-entry-opened/);
+});
+
 test('skip is terminal in automatic mode while manual replay stays local', () => {
   const automatic = createGuideState({ coreStatus: 'in_progress', autoStart: true });
   assert.equal(reduceGuide(automatic, { type: 'skip' }).step, 'skipped');
@@ -137,18 +162,134 @@ test('replays retain saved tutorial resources and recover an interrupted progres
 test('AI settings enter the onboarding spotlight before their configuration request can fail', () => {
   const app = read('app.js');
   const opening = app.indexOf('const opening = aiSettings.open(');
-  const spotlight = app.indexOf("onboarding.showInstruction(aiGuideInstruction(), '#ai-settings-form');", opening);
+  const spotlight = app.indexOf("onboarding.showInstruction({ ...aiGuideInstruction(), cardPlacement: 'above' }, '#ai-key');", opening);
   const awaited = app.indexOf('const opened = await opening;', opening);
 
   assert.ok(opening >= 0);
   assert.ok(spotlight > opening && spotlight < awaited);
 });
 
-test('the spotlight card moves above controls placed in the mobile footer', () => {
+test('the guide rail reserves the top safe area so targets stay clear on mobile', () => {
   const guide = read('onboarding.js');
   const styles = read('onboarding.css');
 
-  assert.match(guide, /data-card-position/);
-  assert.match(guide, /--onboarding-card-bottom/);
-  assert.match(styles, /data-card-position="above-target"/);
+  assert.match(guide, /function ensureTargetVisible\(\)/);
+  assert.match(guide, /guidebar\.getBoundingClientRect\(\)/);
+  assert.match(styles, /top: var\(--onboarding-guidebar-top/);
+});
+
+test('the guided composition step emphasizes saving while leaving its sample form editable', () => {
+  const app = read('app.js');
+  const start = app.indexOf('function openEssayDialog()');
+  const end = app.indexOf('function openEditEssayDialog()', start);
+  const openEssayDialog = app.slice(start, end);
+
+  assert.match(openEssayDialog, /const submitButton = dom\.essayForm\.querySelector\('button\[type="submit"\]'\);/);
+  assert.match(openEssayDialog, /cue: '确认后点击保存范文'/);
+  assert.match(openEssayDialog, /\}, submitButton, \{\s*interactiveTargets: \[dom\.essayForm\]\s*\}\);/s);
+  assert.doesNotMatch(openEssayDialog, /\}, dom\.essayTitle\);/);
+});
+
+test('the meaning tutorial highlights an entire part-of-speech group instead of one checkbox', () => {
+  const app = read('app.js');
+
+  assert.match(app, /#wb-editor \.wb-meaning-picker fieldset/);
+  assert.doesNotMatch(app, /const target = document\.querySelector\('#wb-editor \[data-meaning-choice\]'\)/);
+});
+
+test('selecting a meaning hands the tutorial save button to the guided scroll', () => {
+  const app = read('app.js');
+  const eventStart = app.indexOf("document.addEventListener('vocabnote:wordbook-meaning-selected'");
+  const eventEnd = app.indexOf("document.addEventListener('vocabnote:wordbook-editor-closed'", eventStart);
+  const handler = app.slice(eventStart, eventEnd);
+
+  assert.match(handler, /guideWordbookSaveButton\(saveButton\)/);
+  assert.match(handler, /onboarding\.showInstruction\(/);
+});
+
+test('the save cue keeps every dictionary meaning selectable until the entry is collected', () => {
+  const app = read('app.js');
+  const guide = read('onboarding.js');
+  const eventStart = app.indexOf("document.addEventListener('vocabnote:wordbook-meaning-selected'");
+  const eventEnd = app.indexOf("document.addEventListener('vocabnote:wordbook-editor-closed'", eventStart);
+  const handler = app.slice(eventStart, eventEnd);
+
+  assert.match(handler, /interactiveTargets/);
+  assert.match(handler, /#wb-editor \.wb-meaning-picker/);
+  assert.match(handler, /#wb-save/);
+  assert.match(guide, /interactiveTargets/);
+  assert.match(guide, /allowedTargets/);
+});
+
+test('the wordbook save cue scrolls slowly and shows a downward hint only when the button is below the dialog', () => {
+  const app = read('app.js');
+  const guide = read('onboarding.js');
+
+  assert.match(app, /function guideWordbookSaveButton\(saveButton\)/);
+  assert.match(app, /const duration = 900;/);
+  assert.match(app, /onboarding\.setScrollHint\(buttonRect\.top > dialogRect\.bottom - 12\)/);
+  assert.match(guide, /function setScrollHint\(visible/);
+});
+
+test('the first-step spotlight exposes a clear target hole and emphasizes it without background blur', () => {
+  const guide = read('onboarding.js');
+  const styles = read('onboarding.css');
+
+  assert.match(guide, /data-onboarding-scrim="top"/);
+  assert.match(guide, /function positionScrimPanels\(rect\)/);
+  assert.match(styles, /\.onboarding-scrim\[data-onboarding-scrim\]/);
+  assert.doesNotMatch(styles, /backdrop-filter/);
+  assert.match(styles, /animation: onboarding-target-pulse/);
+  assert.match(styles, /@keyframes onboarding-target-pulse/);
+  assert.doesNotMatch(guide, /scrim\.hidden/);
+});
+
+test('tutorial guidance stays in the fixed rail while target cues follow the active control', () => {
+  const app = read('app.js');
+  const guide = read('onboarding.js');
+  const styles = read('onboarding.css');
+
+  assert.match(guide, /function positionTargetNote\(rect\)/);
+  assert.match(guide, /targetNote\.hidden = false/);
+  assert.match(styles, /\.onboarding-guide-details/);
+  assert.match(styles, /data-guidebar-expanded="true"/);
+  assert.match(app, /cue: '可多选，选完再收录'/);
+});
+
+test('the redesigned guide uses a non-blocking top rail and a small target cue without dimming the page', () => {
+  const app = read('app.js');
+  const guide = read('onboarding.js');
+  const styles = read('onboarding.css');
+
+  assert.match(guide, /onboarding-guidebar/);
+  assert.match(guide, /onboarding-target-note/);
+  assert.match(guide, /function ensureTargetVisible\(\)/);
+  assert.match(guide, /toggle-details/);
+  assert.match(styles, /\.onboarding-guidebar/);
+  assert.match(styles, /\.onboarding-target-note/);
+  assert.match(styles, /\.onboarding-scrim\s*\{[^}]*display:\s*none/s);
+  assert.match(app, /cue: '可多选，选完再收录'/);
+});
+
+test('a target in the fixed page header moves the guide rail below that header instead of covering it', () => {
+  const guide = read('onboarding.js');
+  const styles = read('onboarding.css');
+
+  assert.match(guide, /function positionGuidebarForTarget\(rect\)/);
+  assert.match(guide, /guidebarPlacement = 'below-target'/);
+  assert.match(guide, /--onboarding-guidebar-top/);
+  assert.match(styles, /top: var\(--onboarding-guidebar-top/);
+  assert.match(styles, /width: min\(680px, calc\(100vw - 24px\)\)/);
+});
+
+test('a fixed-header target suppresses its nearby cue because the guide rail already explains the action', () => {
+  const guide = read('onboarding.js');
+  const start = guide.indexOf('function positionTargetNote(rect)');
+  const end = guide.indexOf('function ensureTargetVisible()', start);
+  const positionTargetNote = guide.slice(start, end);
+
+  assert.match(
+    positionTargetNote,
+    /if \(layer\.dataset\.guidebarPlacement === 'below-target'\) \{\s*targetNote\.hidden = true;\s*return;\s*\}/s
+  );
 });

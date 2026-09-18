@@ -101,7 +101,7 @@
 .wb-welcome-rule { width: 45px; height: 2px; background: var(--sun); margin: 35px auto 16px; }
 .wb-back { display: none; margin-bottom: 24px; }
 .wb-loading { padding: 80px 15px; text-align: center; color: var(--muted); font-size: .85rem; }
-.wb-dialog { width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 30px; color: var(--ink); background: var(--sheet); border: 1px solid rgba(33,77,61,.3); border-radius: 5px; box-shadow: var(--shadow); overscroll-behavior: contain; }
+.wb-dialog { width: min(560px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 30px; overflow-y: auto; color: var(--ink); background: var(--sheet); border: 1px solid rgba(33,77,61,.3); border-radius: 5px; box-shadow: var(--shadow); overscroll-behavior: contain; }
 .wb-dialog::backdrop { background: rgba(22,35,29,.45); backdrop-filter: blur(3px); }
 .wb-dialog-heading { display: flex; justify-content: space-between; gap: 15px; align-items: flex-start; }
 .wb-dialog h2 { margin: 0 0 16px; font-size: 1.45rem; line-height: 1.6; overflow-wrap: anywhere; }
