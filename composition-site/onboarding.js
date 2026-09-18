@@ -185,8 +185,14 @@
       ring.hidden = true;
       ring.removeAttribute('style');
       layer.removeAttribute('data-card-position');
+      layer.dataset.keyboardOpen = 'false';
       layer.style.removeProperty('--onboarding-card-bottom');
+      layer.style.removeProperty('--onboarding-keyboard-offset');
       moveLayerToTargetContext(null);
+    }
+
+    function detach() {
+      clearTarget();
     }
 
     function positionCardForViewport() {
@@ -431,6 +437,7 @@
       getState: snapshot,
       setStatus,
       setTarget,
+      detach,
       showInstruction,
       showCompletionTip,
       setSystemClose,

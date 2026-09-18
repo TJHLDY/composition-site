@@ -122,6 +122,28 @@ test('the mobile annotation step retargets the compact word card before opening 
   assert.match(app, /function closeMobileWordAction/);
 });
 
+test('replays retain saved tutorial resources and recover an interrupted progress sync on the page', () => {
+  const app = read('app.js');
+  const guide = read('onboarding.js');
+
+  assert.doesNotMatch(app, /resetResources:\s*mode === 'manual'/);
+  assert.match(app, /function showCoreProgressRecovery/);
+  assert.match(app, /retry-core-progress/);
+  assert.match(app, /onboarding\.detach\(\)/);
+  assert.match(guide, /function detach\(\)/);
+  assert.match(guide, /\n\s*detach,\n/);
+});
+
+test('AI settings enter the onboarding spotlight before their configuration request can fail', () => {
+  const app = read('app.js');
+  const opening = app.indexOf('const opening = aiSettings.open(');
+  const spotlight = app.indexOf("onboarding.showInstruction(aiGuideInstruction(), '#ai-settings-form');", opening);
+  const awaited = app.indexOf('const opened = await opening;', opening);
+
+  assert.ok(opening >= 0);
+  assert.ok(spotlight > opening && spotlight < awaited);
+});
+
 test('the spotlight card moves above controls placed in the mobile footer', () => {
   const guide = read('onboarding.js');
   const styles = read('onboarding.css');

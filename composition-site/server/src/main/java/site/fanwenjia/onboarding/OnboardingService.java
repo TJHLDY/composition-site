@@ -62,7 +62,7 @@ public class OnboardingService {
 
     public OnboardingView recordWordbook(CurrentUser user, Long entryId) {
         wordbookService.read(user, entryId);
-        UserOnboarding onboarding = active(user);
+        UserOnboarding onboarding = recordable(user);
         onboarding.recordWordbook(entryId);
         return viewOf(onboarding);
     }
@@ -70,7 +70,7 @@ public class OnboardingService {
     public OnboardingView recordComposition(CurrentUser user, Long compositionId) {
         compositionRepository.findByIdAndOwnerId(compositionId, user.id())
                 .orElseThrow(() -> notFound("范文不存在"));
-        UserOnboarding onboarding = active(user);
+        UserOnboarding onboarding = recordable(user);
         require(onboarding.getTutorialWordbookId() != null, "请先完成单词收录。");
         onboarding.recordComposition(compositionId);
         return viewOf(onboarding);
@@ -97,6 +97,13 @@ public class OnboardingService {
         UserOnboarding onboarding = repository.lockByOwnerId(user.id())
                 .orElseThrow(() -> new OnboardingConflictException("该账号不需要自动新手引导。"));
         require(onboarding.getCoreStatus() == OnboardingStatus.IN_PROGRESS, "新手引导当前未在进行中。");
+        return onboarding;
+    }
+
+    private UserOnboarding recordable(CurrentUser user) {
+        UserOnboarding onboarding = repository.lockByOwnerId(user.id())
+                .orElseGet(() -> repository.save(UserOnboarding.legacyAccount(user.id())));
+        onboarding.start();
         return onboarding;
     }
 

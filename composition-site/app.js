@@ -146,6 +146,7 @@
   let onboardingView = null;
   let onboardingRequestId = 0;
   let coreProgressBusy = false;
+  let pendingCoreProgressRetry = null;
   let aiRequirementPromise = null;
   let aiRequirementRequestId = 0;
   let pendingAiRetry = null;
@@ -568,6 +569,7 @@
     aiRequirementRequestId += 1;
     aiRequirementPromise = null;
     coreProgressBusy = false;
+    pendingCoreProgressRetry = null;
     pendingAiRetry = null;
     preloadAiResume = null;
     temporaryAiGuide = false;
@@ -709,7 +711,7 @@
   function startWordbookGuideStage() {
     const guide = activeGuideState();
     if (!guide || guide.step !== 'wordbook') return;
-    if (guide.mode === 'auto' && guide.wordbookId) {
+    if (guide.wordbookId) {
       onboarding.showInstruction({
         eyebrow: '继续上次的教程',
         title: '之前收录的内容还在',
@@ -724,7 +726,7 @@
   function startCompositionGuideStage() {
     const guide = activeGuideState();
     if (!guide || guide.step !== 'composition') return;
-    if (guide.mode === 'auto' && guide.compositionId) {
+    if (guide.compositionId) {
       onboarding.showInstruction({
         eyebrow: '继续上次的教程',
         title: '之前保存的范文还在',
@@ -748,12 +750,12 @@
   function startCoreGuide(view, mode = 'auto') {
     temporaryAiGuide = false;
     onboardingView = view;
+    pendingCoreProgressRetry = null;
     switchView('wordbook');
     onboarding.start(view, {
       mode,
-      resetResources: mode === 'manual',
       instruction: guideInstruction('wordbook'),
-      target: mode === 'auto' && view.tutorialWordbookId ? null : '#wb-search-form'
+      target: view.tutorialWordbookId ? null : '#wb-search-form'
     });
     startWordbookGuideStage();
   }
@@ -798,16 +800,17 @@
     const coreGuide = Boolean(guideBeforeOpen && !temporaryAiGuide);
     const resumeOnce = resume ? once(resume) : null;
     if (resumeOnce) pendingAiRetry = resumeOnce;
-    const opened = await aiSettings.open({
+    const opening = aiSettings.open({
       tutorial,
       onSaved: async () => {
         const retry = pendingAiRetry;
         pendingAiRetry = null;
         preloadAiResume = null;
         activePreloadAiKey = null;
-        markOnboardingCloseControls('#ai-settings-close', false);
+        if (onboarding.isActive()) onboarding.detach();
         if (retry) await retry();
         if (!tutorial || !onboarding.isActive()) return;
+        markOnboardingCloseControls('#ai-settings-close', false);
         if (coreGuide) {
           const current = activeGuideState();
           if (current?.step === 'wordbook') startWordbookGuideStage();
@@ -832,9 +835,13 @@
         if (onboarding.isActive()) onboarding.close();
       }
     });
+    if (tutorial && coreGuide && onboarding.isActive()) {
+      onboarding.showInstruction(aiGuideInstruction(), '#ai-settings-form');
+      onboarding.setSystemClose('#ai-settings-close', true);
+    }
+    const opened = await opening;
     if (!opened || !tutorial) return opened;
-    if (coreGuide) onboarding.showInstruction(aiGuideInstruction(), '#ai-settings-form');
-    else {
+    if (!coreGuide) {
       temporaryAiGuide = true;
       onboarding.start({}, {
         mode: 'manual',
@@ -888,6 +895,18 @@
     container.append(document.createTextNode(' '), button);
   }
 
+  function showCoreProgressRecovery(type, detail, error) {
+    const retryDetail = { ...detail };
+    pendingCoreProgressRetry = () => advanceCoreGuide(type, retryDetail);
+    onboarding.showInstruction({
+      eyebrow: '教程进度尚未确认',
+      title: '刚才保存的内容还在',
+      copy: '网络暂时不稳定。重新确认后会继续教程；也可以选择跳过教程。',
+      actions: [{ action: 'retry-core-progress', label: '重新确认', tone: 'primary' }]
+    }, null);
+    onboarding.setStatus(error?.message || '教程进度暂时无法同步，请稍后再试。');
+  }
+
   async function advanceCoreGuide(type, detail = {}) {
     const guide = activeGuideState();
     if (!guide || coreProgressBusy) return;
@@ -896,13 +915,15 @@
     if (type === 'preload' && (guide.step !== 'preload' || String(guide.compositionId) !== String(detail.compositionId))) return;
     if (type === 'annotation' && (guide.step !== 'annotation' || detail.kind !== 'word' || !detail.annotationId)) return;
 
+    pendingCoreProgressRetry = null;
     coreProgressBusy = true;
+    onboarding.detach();
     try {
-      if (guide.mode === 'auto') {
-        onboarding.setStatus('正在确认教程进度…');
-        if (type === 'wordbook') onboardingView = await api.recordOnboardingWordbook(detail.entryId);
-        if (type === 'composition') onboardingView = await api.recordOnboardingComposition(detail.compositionId);
-        if (type === 'annotation') onboardingView = await api.completeOnboarding(detail.annotationId);
+      onboarding.setStatus('正在确认教程进度…');
+      if (type === 'wordbook') onboardingView = await api.recordOnboardingWordbook(detail.entryId);
+      if (type === 'composition') onboardingView = await api.recordOnboardingComposition(detail.compositionId);
+      if (type === 'annotation' && onboardingView?.coreStatus === 'in_progress') {
+        onboardingView = await api.completeOnboarding(detail.annotationId);
       }
 
       if (type === 'wordbook') {
@@ -924,13 +945,19 @@
         onboarding.showCompletionTip();
       }
     } catch (error) {
-      if (!handleExpiredSession(error)) onboarding.setStatus(errorMessage(error, '教程进度暂时无法同步，请稍后再试。'));
+      if (!handleExpiredSession(error)) showCoreProgressRecovery(type, detail, error);
     } finally {
       coreProgressBusy = false;
     }
   }
 
   function handleGuideAction(action, guide) {
+    if (action === 'retry-core-progress' && pendingCoreProgressRetry) {
+      const retry = pendingCoreProgressRetry;
+      pendingCoreProgressRetry = null;
+      void retry();
+      return;
+    }
     if (!guide) return;
     if (action === 'resume-wordbook' && guide.wordbookId) {
       onboarding.dispatch({ type: 'resume-saved-wordbook' });
@@ -1111,6 +1138,7 @@
     aiRequirementRequestId += 1;
     aiRequirementPromise = null;
     coreProgressBusy = false;
+    pendingCoreProgressRetry = null;
     pendingAiRetry = null;
     preloadAiResume = null;
     temporaryAiGuide = false;
@@ -1197,17 +1225,17 @@
         normalizeListItem({ ...created, noteCount: created.annotations.length }),
         ...state.essays.filter((essay) => essay.id !== created.id)
       ];
+      emitOnboardingEvent('vocabnote:composition-saved', {
+        compositionId: created.id,
+        composition: created,
+        editing: Boolean(editing)
+      });
       markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', false);
       closeDialog(dom.essayDialog);
       renderAll();
       if (isMobileLayout()) dom.workspace.classList.add('show-reader');
       void refreshEssayList();
       showToast(editing ? '修改已保存，正在更新语境释义。' : '范文已保存，正在后台预加载语境释义。');
-      emitOnboardingEvent('vocabnote:composition-saved', {
-        compositionId: created.id,
-        composition: created,
-        editing: Boolean(editing)
-      });
     } catch (error) {
       if (!handleExpiredSession(error)) dom.essayFormError.textContent = errorMessage(error, '范文暂时没有保存成功。');
     } finally {
@@ -1499,6 +1527,11 @@
       const existingIndex = essay.annotations.findIndex((annotation) => annotation.id === saved.id);
       if (existingIndex >= 0) essay.annotations.splice(existingIndex, 1, saved);
       else essay.annotations.push(saved);
+      emitOnboardingEvent('vocabnote:annotation-saved', {
+        annotationId: saved.id,
+        compositionId: essay.id,
+        kind: saved.kind
+      });
       markOnboardingCloseControls('#note-dialog [data-close-dialog]', false);
       closeDialog(dom.noteDialog);
       pendingAnnotation = null;
@@ -1506,11 +1539,6 @@
       renderAll();
       void refreshEssayList();
       showToast(existingIndex >= 0 ? '这条摘录已经更新。' : '已保存到本篇笔记。');
-      emitOnboardingEvent('vocabnote:annotation-saved', {
-        annotationId: saved.id,
-        compositionId: essay.id,
-        kind: saved.kind
-      });
     } catch (error) {
       if (!handleExpiredSession(error)) dom.noteFormError.textContent = errorMessage(error, '笔记暂时没有保存成功。');
     } finally {
@@ -2001,6 +2029,8 @@
   });
   const onboarding = onboardingModule.createOnboardingController({
     onSkip: async () => { onboardingView = await api.skipOnboarding(); },
+    onSkipped: () => { pendingCoreProgressRetry = null; },
+    onClose: () => { pendingCoreProgressRetry = null; },
     onAction: handleGuideAction
   });
   wireOnboardingEvents();

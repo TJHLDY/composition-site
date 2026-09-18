@@ -131,6 +131,34 @@ class OnboardingApiTest {
     }
 
     @Test
+    void legacyAccountCanKeepOneReplayResourceWithoutReenablingAutomaticOnboarding() throws Exception {
+        String token = register("onboarding-replay@example.com", "Replay learner");
+        jdbcTemplate.update("delete from user_onboarding where owner_id = (select id from app_users where email = ?)",
+                "onboarding-replay@example.com");
+        entityManager.clear();
+
+        long wordbookId = createWordbook(token, "explore");
+        mockMvc.perform(post("/api/onboarding/core/wordbook/{entryId}", wordbookId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.coreStatus").value("completed"))
+                .andExpect(jsonPath("$.autoStart").value(false))
+                .andExpect(jsonPath("$.tutorialWordbookId").value(wordbookId));
+
+        mockMvc.perform(post("/api/onboarding/core/wordbook/{entryId}", wordbookId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        long compositionId = createComposition(token, "Replay essay", "Students explore ideas.");
+        mockMvc.perform(post("/api/onboarding/core/composition/{compositionId}", compositionId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.coreStatus").value("completed"))
+                .andExpect(jsonPath("$.autoStart").value(false))
+                .andExpect(jsonPath("$.tutorialCompositionId").value(compositionId));
+    }
+
+    @Test
     void aiGuideIsClaimedOnceWithoutReopeningTheCoreGuide() throws Exception {
         String token = register("onboarding-ai@example.com", "AI learner");
 
