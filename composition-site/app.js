@@ -952,6 +952,33 @@
     }
   }
 
+  function showConfirm({ eyebrow = '', title = '', message = '', okText = '确认', cancelText = '取消' } = {}) {
+    return new Promise(resolve => {
+      const dialog = document.getElementById('confirm-dialog');
+      if (!dialog) { resolve(window.confirm(message || title)); return; }
+      document.getElementById('confirm-dialog-eyebrow').textContent = eyebrow;
+      document.getElementById('confirm-dialog-title').textContent = title;
+      document.getElementById('confirm-dialog-message').textContent = message;
+      document.getElementById('confirm-ok').textContent = okText;
+      document.getElementById('confirm-cancel').textContent = cancelText;
+      function finish(result) {
+        dialog.removeEventListener('close', onClose);
+        ok.removeEventListener('click', onOk);
+        cancel.removeEventListener('click', onCancel);
+        resolve(result);
+      }
+      const ok = document.getElementById('confirm-ok');
+      const cancel = document.getElementById('confirm-cancel');
+      function onOk() { dialog.close(); finish(true); }
+      function onCancel() { dialog.close(); finish(false); }
+      function onClose() { finish(false); }
+      ok.addEventListener('click', onOk);
+      cancel.addEventListener('click', onCancel);
+      dialog.addEventListener('close', onClose, { once: true });
+      dialog.showModal();
+    });
+  }
+
   function showAiSettingsAction(container, resume) {
     if (!container || container.querySelector('[data-ai-settings-direct]')) return;
     const button = document.createElement('button');
@@ -1025,6 +1052,10 @@
       const retry = pendingCoreProgressRetry;
       pendingCoreProgressRetry = null;
       void retry();
+      return;
+    }
+    if (action === 'open-ai-settings') {
+      void openAiSettings({ tutorial: true });
       return;
     }
     if (!guide) return;
@@ -1265,17 +1296,17 @@
     openDialog(dom.essayDialog);
     if (guidedComposition) {
       onboarding.showInstruction({
-        eyebrow: '第 2 步 · 保存一篇范文',
-        title: '确认后保存这篇范文',
-        copy: '示例题目和正文已经写好；需要时可以直接修改。确认后点击“保存范文”，系统会立即预加载语境释义。',
+        eyebrow: '第 2 步 · 留下一篇范文',
+        title: '改成你自己的材料更好',
+        copy: '示例内容可以直接保存，但换成你正在学习的范文效果最好。编辑完成后点击保存。',
         cardPlacement: 'above',
-        cue: '确认后点击保存范文'
+        cue: '编辑或直接保存'
       }, submitButton, {
         interactiveTargets: [dom.essayForm]
       });
     }
     window.setTimeout(() => {
-      (guidedComposition ? submitButton : dom.essayTitle).focus({ preventScroll: true });
+      dom.essayTitle.focus({ preventScroll: true });
     }, 0);
   }
 
@@ -1914,7 +1945,13 @@
     const essay = currentEssay();
     const note = essay && essay.annotations.find((annotation) => annotation.id === noteId);
     if (!essay || !note) return;
-    if (!window.confirm(`确定从本篇笔记中删除「${note.selectedText}」吗？`)) return;
+    const confirmNote = await showConfirm({
+      eyebrow: '删除笔记',
+      title: `删除「${note.selectedText}」`,
+      message: '将从本篇笔记中移除该摘录，操作无法撤销。',
+      okText: '确认删除'
+    });
+    if (!confirmNote) return;
     try {
       await api.deleteAnnotation(essay.id, note.id);
       essay.annotations = essay.annotations.filter((annotation) => annotation.id !== note.id);
@@ -1929,7 +1966,13 @@
   async function removeEssay(essayId) {
     const essay = state.essays.find((item) => item.id === String(essayId));
     if (!essay) return;
-    if (!window.confirm(`确定删除「${essay.title}」吗？范文及本篇摘录都会一起删除，且无法恢复。`)) return;
+    const confirmEssay = await showConfirm({
+      eyebrow: '删除范文',
+      title: `删除「${essay.title}」`,
+      message: '范文及本篇摘录都会一起删除，且无法恢复。',
+      okText: '确认删除'
+    });
+    if (!confirmEssay) return;
     try {
       await api.deleteComposition(essay.id);
       state.essays = state.essays.filter((item) => item.id !== essay.id);
@@ -2018,7 +2061,7 @@
         }
         if (dialog === dom.essayDialog && guideAt('composition')) {
           markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', false);
-          onboarding.close();
+          startCompositionGuideStage(); // 回到高亮按钮状态，不杀引导
         }
         closeDialog(dialog);
       });
@@ -2026,7 +2069,7 @@
     dom.essayDialog.addEventListener('cancel', () => {
       if (!guideAt('composition')) return;
       markOnboardingCloseControls('[data-close-dialog="essay-dialog"]', false);
-      onboarding.close();
+      startCompositionGuideStage(); // 回到高亮按钮状态，不杀引导
     });
     dom.noteDialog.addEventListener('cancel', () => {
       pendingAnnotation = null;

@@ -185,7 +185,7 @@ test('the guided composition step emphasizes saving while leaving its sample for
   const openEssayDialog = app.slice(start, end);
 
   assert.match(openEssayDialog, /const submitButton = dom\.essayForm\.querySelector\('button\[type="submit"\]'\);/);
-  assert.match(openEssayDialog, /cue: '确认后点击保存范文'/);
+  assert.match(openEssayDialog, /cue: '编辑或直接保存'/);
   assert.match(openEssayDialog, /\}, submitButton, \{\s*interactiveTargets: \[dom\.essayForm\]\s*\}\);/s);
   assert.doesNotMatch(openEssayDialog, /\}, dom\.essayTitle\);/);
 });

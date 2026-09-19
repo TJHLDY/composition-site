@@ -129,7 +129,10 @@
     async function perform(action) {
       if (busy) return;
       const tutorial = openContext.tutorial;
-      if (action === 'delete' && !window.confirm('删除后，AI 功能需重新配置密钥。确定删除？')) return;
+      const ok = await (typeof showConfirm === 'function'
+        ? showConfirm({ eyebrow: '删除 AI 配置', title: '确认删除密钥？', message: '删除后，AI 功能需重新配置密钥才能继续使用。', okText: '确认删除' })
+        : Promise.resolve(window.confirm('删除后，AI 功能需重新配置密钥。确定删除？')));
+      if (!ok) return;
       if (action !== 'delete' && !key.value.trim() && !(saved?.configured && saved.provider === provider.value)) {
         status.textContent = '请填写所选服务商的 API Key。';
         key.focus();

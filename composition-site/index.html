@@ -285,6 +285,20 @@
       </form>
     </dialog>
 
+    <dialog class="dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message">
+      <div class="dialog-title-row">
+        <div>
+          <p class="eyebrow" id="confirm-dialog-eyebrow"></p>
+          <h2 id="confirm-dialog-title"></h2>
+        </div>
+      </div>
+      <p id="confirm-dialog-message" class="dialog-intro"></p>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="confirm-cancel" type="button">取消</button>
+        <button class="primary-button confirm-danger" id="confirm-ok" type="button">确认删除</button>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="api-client.js"></script>
     <script src="essay-utils.js"></script>

@@ -532,6 +532,15 @@ input:focus, textarea:focus { border-color: var(--moss); box-shadow: 0 0 0 3px r
 .secondary-button { color: var(--moss); border: 1px solid rgba(33,77,61,.26); background: transparent; }
 .secondary-button:hover { background: rgba(229,223,207,.55); }
 
+/* 自定义确认弹窗 */
+.confirm-dialog { width: min(420px, calc(100vw - 32px)); }
+.confirm-dialog .dialog-title-row { padding: clamp(22px, 4.5vw, 30px) clamp(22px, 4.5vw, 30px) 0; }
+.confirm-dialog .dialog-intro { margin: 10px 0 0; padding: 0 clamp(22px, 4.5vw, 30px); }
+.confirm-dialog .dialog-actions { padding: 18px clamp(22px, 4.5vw, 30px) clamp(22px, 4.5vw, 28px); }
+.confirm-danger { border-color: var(--vermilion) !important; background: var(--vermilion) !important; box-shadow: 0 3px 0 #7a2c1e !important; }
+.confirm-danger:hover { background: #c4513a !important; }
+.confirm-danger:active { box-shadow: 0 1px 0 #7a2c1e !important; }
+
 .selection-card { padding: 13px 15px; border-left: 3px solid var(--vermilion); background: rgba(229,223,207,.43); }
 .selection-card-label { display: block; margin-bottom: 5px; color: var(--vermilion); font-size: .65rem; font-weight: 800; letter-spacing: .1em; }
 .selection-card strong { display: block; color: var(--moss); font-family: var(--display); font-size: 1.25rem; line-height: 1.35; word-break: break-word; }
